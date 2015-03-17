@@ -25,7 +25,7 @@ object HmrcBuild extends Build {
   import PublishingSettings._
 
   val appName = "play-filters"
-  val appVersion = "1.0.0"
+  val appVersion = "1.1.0-SNAPSHOT"
 
   lazy val microservice = Project(appName, file("."))
     .settings(version := appVersion)
