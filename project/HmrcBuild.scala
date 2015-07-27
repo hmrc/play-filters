@@ -48,7 +48,7 @@ private object AppDependencies {
   import play.core.PlayVersion
 
   val compile = Seq(
-    "com.typesafe.play" %% "play" % PlayVersion.current,
+    "com.typesafe.play" %% "play" % PlayVersion.current % "provided",
 
     "uk.gov.hmrc" %% "http-exceptions" % "0.3.0"
   )
