@@ -14,18 +14,14 @@
  * limitations under the License.
  */
 
-import sbt._
 import sbt.Keys._
-import uk.gov.hmrc.SbtAutoBuildPlugin
-import uk.gov.hmrc.versioning.SbtGitVersioning
+import sbt._
 import uk.gov.hmrc.versioning.SbtGitVersioning
 
 object HmrcBuild extends Build {
 
+  import uk.gov.hmrc.DefaultBuildSettings._
   import uk.gov.hmrc._
-  import DefaultBuildSettings._
-  import uk.gov.hmrc.{SbtBuildInfo, ShellPrompt}
-  import PublishingSettings._
 
   val appName = "play-filters"
 
