@@ -1,6 +1,9 @@
 play-filters
 ============
 
+[![Build Status](https://travis-ci.org/hmrc/play-filters.svg)](https://travis-ci.org/hmrc/play-filters) [ ![Download](https://api.bintray.com/packages/hmrc/releases/play-filters/images/download.svg) ](https://bintray.com/hmrc/releases/play-filters/_latestVersion)
+
+
 A library containing Play Framework filters to be used by frontend apps and microservices.
 
 ## Adding to your service
@@ -10,7 +13,7 @@ Include the following dependency in your SBT build
 ```scala
 resolvers += Resolver.bintrayRepo("hmrc", "releases")
 
-libraryDependencies += "uk.gov.hmrc" %% "play-filters" % "1.1.0"
+libraryDependencies += "uk.gov.hmrc" %% "play-filters" % "[INSERT-VERSION]"
 ```
 
 ## License ##
