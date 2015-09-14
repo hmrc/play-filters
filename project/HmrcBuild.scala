@@ -28,7 +28,6 @@ object HmrcBuild extends Build {
   lazy val microservice = Project(appName, file("."))
     .enablePlugins(SbtAutoBuildPlugin, SbtGitVersioning)
     .settings(
-      targetJvm := "jvm-1.7",
       scalaVersion := "2.11.7",
       libraryDependencies ++= AppDependencies(),
       crossScalaVersions := Seq("2.11.7"),
@@ -60,7 +59,7 @@ private object AppDependencies {
       override lazy val test = Seq(
         "com.typesafe.play" %% "play-test" % PlayVersion.current % scope,
         "org.scalatest" %% "scalatest" % "2.2.4" % scope,
-        "org.pegdown" % "pegdown" % "1.4.2" % scope
+        "org.pegdown" % "pegdown" % "1.5.0" % scope
       )
     }.test
   }
