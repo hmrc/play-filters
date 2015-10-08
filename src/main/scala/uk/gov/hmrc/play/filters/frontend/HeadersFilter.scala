@@ -38,7 +38,7 @@ trait HeadersFilter extends EssentialFilter {
 
     def addHeaders(request: RequestHeader): RequestHeader = {
       val rid = s"govuk-tax-${UUID.randomUUID().toString}"
-      val requestIdHeader = xRequestId -> Seq(rid)
+      val requestIdHeader: (String, Seq[String]) = xRequestId -> Seq(rid)
       val requestTimestampHeader = xRequestTimestamp -> Seq(System.nanoTime().toString)
 
       val newHeaders = new Headers {
