@@ -50,7 +50,7 @@ trait CookieCryptoFilter extends Filter {
 
   private def decryptCookie(rh: RequestHeader) = rh.copy(headers = new Headers {
     override protected val data: Seq[(String, Seq[String])] = {
-      val updatedCookies = rh.headers.getAll(HeaderNames.COOKIE).flatMap(Cookies.decode).flatMap {
+      val updatedCookies: Seq[Cookie] = rh.headers.getAll(HeaderNames.COOKIE).flatMap(Cookies.decode).flatMap {
         case cookie if shouldBeEncrypted(cookie) =>
           decryptValue(cookie.value)
             .map(dv => cookie.copy(value = dv))
