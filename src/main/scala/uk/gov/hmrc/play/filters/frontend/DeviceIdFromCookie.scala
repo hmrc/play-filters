@@ -54,9 +54,6 @@ trait DeviceIdFromCookie {
     DeviceId(uuid, timestamp, generateHash(uuid, timestamp))
   }
 
-  // TODO...ONLY USED FOR TEST???
-  def generateDeviceIdLegacy(uuid: String = generateUUID): DeviceId = DeviceId(uuid, None, generateHash(uuid, None))
-
   def generateUUID = UUID.randomUUID().toString
 
   def generateHash(uuid:String, timestamp:Option[Long]) = {

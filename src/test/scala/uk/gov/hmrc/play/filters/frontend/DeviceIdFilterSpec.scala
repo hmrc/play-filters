@@ -70,7 +70,7 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with MockitoSugar wi
   
   "During request pre-processing, the filter" should {
 
-    "no cookie supplied and filter creates new deviceId cookie and response returns the new deviceId cookie" in new Setup {
+    "no cookies exists, filter creates new deviceId cookie and response returns the new deviceId cookie" in new Setup {
 
       val incomingRequest = FakeRequest()
       val result = filter(action)(incomingRequest).futureValue
@@ -79,7 +79,6 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with MockitoSugar wi
       expectedCookie.value shouldBe newFormatGoodCookieDeviceId.value
 
       val responseCookie = result.header.headers.get("Set-Cookie").get
-
       getCookieStringValue(responseCookie)(0) shouldBe newFormatGoodCookieDeviceId.value
     }
 
@@ -96,7 +95,7 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with MockitoSugar wi
       result.header.headers.get("Set-Cookie") shouldBe None
     }
 
-    "legacy deviceId cookie is converted to new format (carrying over the UUID from the legacy cookie) and response contains a new cookie with the legacy UUID" in new Setup {
+    "legacy deviceId cookie is converted to new format (carrying over the UUID from the legacy cookie) and response contains a new formatted device Id cookie with the legacy UUID" in new Setup {
 
       val legacyFormatGoodCookieDeviceId = {
 
@@ -112,7 +111,6 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with MockitoSugar wi
       }
 
       override def filter = new DeviceIdFilter {
-
         override def getTimeStamp = timestamp
       }
 
@@ -127,7 +125,7 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with MockitoSugar wi
       getCookieStringValue(responseCookieString)(0) shouldBe legacyFormatGoodCookieDeviceId._2.value
     }
 
-    "legacy deviceId cookie is invalid and new deviceId cookie is created and response contains the new cookie" in new Setup {
+    "legacy deviceId cookie is invalid, new deviceId cookie is created and response contains the new deviceId cookie" in new Setup {
 
       val legacyFormatBadCookieDeviceId = {
         val legacyDeviceId = generateDeviceIdLegacy().copy(hash="wrongvalue")
@@ -161,8 +159,9 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with MockitoSugar wi
       getCookieStringValue(responseCookie)(0) shouldBe newFormatGoodCookieDeviceId.value
     }
 
-
     def getCookieStringValue(input:String): Array[String] = input.substring((MDTPDeviceId+"_").length,input.length).split(";")
+
+    def generateDeviceIdLegacy(uuid: String = generateUUID): DeviceId = DeviceId(uuid, None, generateHash(uuid, None))
 
   }
 }

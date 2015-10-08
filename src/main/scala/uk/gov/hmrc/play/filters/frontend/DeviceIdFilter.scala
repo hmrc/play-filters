@@ -31,7 +31,6 @@ trait DeviceIdFilter extends Filter with DeviceIdFromCookie {
 
     val updatedCookies: Seq[Cookie] = rh.headers.getAll(HeaderNames.COOKIE).flatMap(Cookies.decode)
 
-
     val (cookies, newCookie:Option[play.api.mvc.Cookie]) = if (updatedCookies.isEmpty) {
       // No cookies in request. Add a new deviceId cookie to the request.
       val newCookie=buildNewCookie()
@@ -48,7 +47,7 @@ trait DeviceIdFilter extends Filter with DeviceIdFromCookie {
 // TODO...FUNCTION!!! CALLED MORE THAN ONCE!!!
             (updatedCookies.filterNot(a => a.name==MDTPDeviceId) ++ Seq(deviceIdCookie), Some(deviceIdCookie))
           } else {
-
+            // New format. Check the cookie is valid.
             deviceIdAndCookie(deviceId) match {
               case Some(deviceId) => (updatedCookies, None)
 
