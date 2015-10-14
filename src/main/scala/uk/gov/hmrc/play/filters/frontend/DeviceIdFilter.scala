@@ -21,11 +21,8 @@ import java.security.MessageDigest
 import play.api.http.HeaderNames
 import play.api.mvc._
 import scala.concurrent.Future
-import scala.concurrent.ExecutionContext.Implicits.global // TODO...USE PETR'S MDC
+import scala.concurrent.ExecutionContext.Implicits.global
 
-
-// TODO: QUESTION ABOUT THE TIMESTAMP...WHAT IF THE TIMESTAMP IS INVALID!!! HASJ WILL BE WRONG!
-// TODO...ADD TEST!!!
 
 trait DeviceIdFilter extends Filter with DeviceIdFromCookie {
 

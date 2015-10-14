@@ -37,10 +37,6 @@ case class DeviceId(uuid: String, timestamp:Option[Long], hash: String) extends 
   def value = timestamp.fold(s"$uuid$token2$hash")(time => s"${prefix_value}$token1$uuid$token1$time$token2$hash")
 }
 
-// TODO...NAMING!!! NOT PLURAL!
-
-// DEVICEID CONSTRUCTION/DECONSTRUCTION!!! TODO...
-
 trait DeviceIds extends DeviceIdData {
   val secret : String
   val md : MessageDigest
