@@ -16,68 +16,61 @@
 
 package uk.gov.hmrc.play.filters.frontend
 
+import java.security.MessageDigest
+
 import play.api.http.HeaderNames
 import play.api.mvc._
-
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import scala.concurrent.ExecutionContext.Implicits.global // TODO...USE PETR'S MDC
 
+
+// TODO: QUESTION ABOUT THE TIMESTAMP...WHAT IF THE TIMESTAMP IS INVALID!!! HASJ WILL BE WRONG!
+// TODO...ADD TEST!!!
 
 trait DeviceIdFilter extends Filter with DeviceIdFromCookie {
 
+  case class CookeResult(cookies:Seq[Cookie], newDeviceIdCookie:Option[Cookie])
+
+  private def findDeviceIdCookie : PartialFunction[Cookie, Cookie] = { case cookie if cookie.name == MDTPDeviceId && !cookie.value.isEmpty => cookie }
+
   override def apply(next: (RequestHeader) => Future[Result])(rh: RequestHeader) = {
 
-    def findDeviceIdCookie : PartialFunction[Cookie, Cookie] = { case cookie if cookie.name == MDTPDeviceId && !cookie.value.isEmpty => cookie }
+    val requestCookies: Seq[Cookie] = rh.headers.getAll(HeaderNames.COOKIE).flatMap(Cookies.decode)
 
-    val updatedCookies: Seq[Cookie] = rh.headers.getAll(HeaderNames.COOKIE).flatMap(Cookies.decode)
+    def allCookiesApartFromDeviceId = requestCookies.filterNot(_.name == MDTPDeviceId)
 
-    val (cookies, newCookie:Option[play.api.mvc.Cookie]) = if (updatedCookies.isEmpty) {
-      // No cookies in request. Add a new deviceId cookie to the request.
-      val newCookie=buildNewCookie()
-      (Seq(newCookie), Some(newCookie))
-    } else {
-      // Cookies exist. Check for legacy and new format mtdpdi.
-      updatedCookies.collectFirst(findDeviceIdCookie) match {
+    val cookieResult = requestCookies.collectFirst(findDeviceIdCookie).fold {
+        // No deviceId cookie found. Create new deviceId cookie, add to request and response.
+        val newDeviceIdCookie = buildNewDeviceIdCookie()
+        CookeResult(requestCookies ++ Seq(newDeviceIdCookie), Some(newDeviceIdCookie))
+      } { deviceCookeValueId =>
+          from(deviceCookeValueId.value) match {
 
-        case Some(deviceId) =>
-          if (deviceId.value.split("_").length<=2) {
-            // Replace legacy cookie with new format.
-            val deviceIdCookie = deviceIdAndCookie(deviceId).fold(buildNewCookie())((a:DeviceFromCookie) => makeCookie(generateDeviceId(a._1.uuid)))
+            case Some(DeviceId(uuid, None, hash)) =>
+              // Replace legacy cookie with new format. Replace existing cookie from request and add new cookie to response.
+              val deviceIdCookie = makeCookie(generateDeviceId(uuid))
+              CookeResult(allCookiesApartFromDeviceId ++ Seq(deviceIdCookie), Some(deviceIdCookie))
 
-// TODO...FUNCTION!!! CALLED MORE THAN ONCE!!!
-            (updatedCookies.filterNot(a => a.name==MDTPDeviceId) ++ Seq(deviceIdCookie), Some(deviceIdCookie))
-          } else {
-            // New format. Check the cookie is valid.
-            deviceIdAndCookie(deviceId) match {
-              case Some(deviceId) => (updatedCookies, None)
+            case Some(DeviceId(uuid, timestamp, hash)) =>
+              // Valid new format cookie. No change to request or response.
+              CookeResult(requestCookies, None)
 
-              case None =>
-                val deviceIdCookie = buildNewCookie()
-// TODO...DUPLICATED...common function.
-                (updatedCookies.filterNot(a => a.name==MDTPDeviceId) ++ Seq(deviceIdCookie), Some(deviceIdCookie))
-            }
+            case None =>
+              // Invalid deviceId cookie. Replace invalid cookie from request with new deviceId cookiem and return in response.
+              val deviceIdCookie = buildNewDeviceIdCookie()
+              CookeResult(allCookiesApartFromDeviceId ++ Seq(deviceIdCookie), Some(deviceIdCookie))
           }
-
-        case None =>
-          val newDeviceIdCookie = buildNewCookie()
-          (updatedCookies ++ Seq(newDeviceIdCookie), newDeviceIdCookie)
       }
-    }
 
-    val updatedHeaders = new Headers {
+    val updatedInputHeaders = rh.copy(headers = new Headers {
       override protected val data: Seq[(String, Seq[String])] = {
-        (rh.headers.toMap + (HeaderNames.COOKIE -> Seq(Cookies.encode(cookies)))).toSeq
+        (rh.headers.toMap + (HeaderNames.COOKIE -> Seq(Cookies.encode(cookieResult.cookies)))).toSeq
       }
-    }
+    })
 
-    val updatedInputHeaders = rh.copy(headers = updatedHeaders)
-
-
-    (next((updatedInputHeaders)).map(a => {
-      newCookie.fold(a)(newDeviceIdCookie => a.withCookies(newDeviceIdCookie))
-    }
-    ))
-
+    next((updatedInputHeaders)).map(theHttpResponse => {
+      cookieResult.newDeviceIdCookie.fold(theHttpResponse)(newDeviceIdCookie => theHttpResponse.withCookies(newDeviceIdCookie))
+    })
 
   }
 

@@ -16,55 +16,22 @@
 
 package uk.gov.hmrc.play.filters.frontend
 
-import java.security.MessageDigest
 import java.util.UUID
 
-import org.apache.commons.codec.binary.Base64
-import play.api.mvc.{Cookie, Request}
+import play.api.mvc.Cookie
 
-trait DeviceIdFromCookie {
-
-  type DeviceFromCookie = (DeviceId, Boolean, Cookie)
-  
-  val TenYears = 315360000
-  val MDTPDeviceId = "mdtpdi"
-
-// TODO...SECRET!!!
-  private val md = MessageDigest.getInstance("MD5")
-
-  // TODO...OVERRIDE IN TEST!
-  private val secret = " SOME SECRET" // Play.configuration.getString("DeviceMD5").getOrElse(throw new IllegalArgumentException("configuration requires value for DeviceMD5"))
-
-  def deviceIdAndCookie(deviceIdCookie:Cookie): Option[DeviceFromCookie] =
-    for {
-      deviceId <- DeviceId.from(deviceIdCookie.value)
-      if deviceIdHashIsValid(deviceId)
-    } yield (deviceId, true, deviceIdCookie)  // TODO...REMOVE!!!
-
-  def deviceIdCookie(request: Request[_]): Option[Cookie] = {
-    request.cookies.get(MDTPDeviceId)
-  }
+trait DeviceIdFromCookie extends DeviceIds {
 
   def getTimeStamp = Some(System.currentTimeMillis())
 
-  def generateDeviceId(uuid: String = generateUUID): DeviceId = {
+  def generateUUID = UUID.randomUUID().toString
 
-// TODO...REPEATED IN DEVICE ID!!!
+  def generateDeviceId(uuid: String = generateUUID): DeviceId = {
     val timestamp = getTimeStamp
     DeviceId(uuid, timestamp, generateHash(uuid, timestamp))
   }
 
-  def generateUUID = UUID.randomUUID().toString
-
-  def generateHash(uuid:String, timestamp:Option[Long]) = {
-    val toHash = timestamp.fold(uuid)(time => DeviceId.prefix_value + "_" + uuid + "_" + time)
-    val digest = md.digest((toHash + secret).getBytes)
-    new String(Base64.encodeBase64(digest))
-  }
-
-  def deviceIdHashIsValid(deviceId: DeviceId) = deviceId.hash == generateHash(deviceId.uuid, deviceId.timestamp)
-
-  def buildNewCookie(): Cookie = {
+  def buildNewDeviceIdCookie(): Cookie = {
     val deviceId = generateDeviceId()
     makeCookie(deviceId)
   }
