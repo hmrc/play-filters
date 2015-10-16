@@ -36,5 +36,5 @@ trait DeviceIdFromCookie extends DeviceIds {
     makeCookie(deviceId)
   }
 
-  def makeCookie(deviceId: DeviceId): Cookie = Cookie(MDTPDeviceId, deviceId.value, Some(TenYears))
+  def makeCookie(deviceId: DeviceId): Cookie = Cookie(DeviceIdData.MDTPDeviceId, deviceId.value, Some(DeviceIdData.TenYears))
 }

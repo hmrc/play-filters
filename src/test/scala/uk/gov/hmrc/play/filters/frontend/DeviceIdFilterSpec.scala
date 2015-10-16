@@ -18,7 +18,7 @@ package uk.gov.hmrc.play.filters.frontend
 
 import java.security.MessageDigest
 
-import org.mockito.ArgumentCaptor
+import org.mockito.{Matchers, ArgumentCaptor}
 import org.mockito.Matchers._
 import org.mockito.Mockito._
 import org.scalactic.TypeCheckedTripleEquals
@@ -27,7 +27,9 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mock.MockitoSugar
 import play.api.mvc._
 import play.api.test.{FakeApplication, FakeRequest}
-import uk.gov.hmrc.play.test.WithFakeApplication
+import uk.gov.hmrc.play.audit.http.connector.AuditConnector
+import uk.gov.hmrc.play.audit.model.{EventTypes, DataEvent}
+import uk.gov.hmrc.play.test.{UnitSpec, WithFakeApplication}
 
 import scala.concurrent.Future
 
@@ -36,8 +38,7 @@ trait FakePlayApplication extends WithFakeApplication {
   override lazy val fakeApplication = FakeApplication()
 }
 
-
-class DeviceIdFilterSpec extends WordSpecLike with Matchers with MockitoSugar with OptionValues with ScalaFutures with DeviceIdData with FakePlayApplication with TypeCheckedTripleEquals with Inspectors {
+class DeviceIdFilterSpec extends UnitSpec with WithFakeApplication with ScalaFutures with MockitoSugar with BeforeAndAfterEach with FakePlayApplication with TypeCheckedTripleEquals with Inspectors {
 
   lazy val timestamp = Some(System.currentTimeMillis())
 
@@ -55,7 +56,11 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with MockitoSugar wi
     }
 
     lazy val filter = new DeviceIdFilter {
-      lazy val cookie = super.buildNewDeviceIdCookie
+      lazy val cookie = super.buildNewDeviceIdCookie()
+
+      lazy val auditConnector = mock[AuditConnector]
+
+      val appName = "SomeAppName"
 
       override val md = MessageDigest.getInstance("MD5")
 
@@ -75,40 +80,51 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with MockitoSugar wi
       updatedRequest.getValue
     }
 
-    def getCookieStringValue(input:String): Array[String] = input.substring((MDTPDeviceId+"_").length,input.length).split(";")
+    def getCookieStringValue(input:String): Array[String] = input.substring((DeviceIdData.MDTPDeviceId+"_").length,input.length).split(";")
 
     def generateDeviceIdLegacy(uuid: String = filter.generateUUID): DeviceId = DeviceId(uuid, None, filter.generateHash(uuid, None))
 
+    def expectAuditIdEvent(badCookie:String, validCookie:String) = {
+      val captor = ArgumentCaptor.forClass(classOf[DataEvent])
+      verify(filter.auditConnector).sendEvent(captor.capture())(Matchers.any(), Matchers.any())
+      val event = captor.getValue
+
+      event.auditType shouldBe EventTypes.Failed
+      event.auditSource shouldBe "SomeAppName"
+
+      event.detail should contain ("tamperedDeviceId" -> badCookie)
+      event.detail should contain ("newDeviceId" -> validCookie)
+    }
   }
 
   "During request pre-processing, the filter" should {
 
-    "no cookies exists, filter creates new deviceId cookie and response returns the new deviceId cookie" in new Setup {
+    "create new deviceId cookie and response returns the new deviceId cookie when no cookies exists" in new Setup {
 
       val incomingRequest = FakeRequest()
       val result = filter(action)(incomingRequest).futureValue
 
-      val expectedCookie = requestPassedToAction.cookies.get(MDTPDeviceId).value
+      val expectedCookie = requestPassedToAction.cookies.get(DeviceIdData.MDTPDeviceId).get
       expectedCookie.value shouldBe newFormatGoodCookieDeviceId.value
 
       val responseCookie = result.header.headers.get("Set-Cookie").get
       getCookieStringValue(responseCookie)(0) shouldBe newFormatGoodCookieDeviceId.value
     }
 
-    "valid new format mtdpdi cookie + other cookie, no updates made to request from filter and no new cookie created in response" in new Setup {
+    "not change the request or the response when a valid new format mtdpdi cookie + other cookie is sent in a request" in new Setup {
       val incomingRequest = FakeRequest().withCookies(newFormatGoodCookieDeviceId, normalCookie1)
       val result = filter(action)(incomingRequest).futureValue
 
-      val expectedCookie = requestPassedToAction.cookies.get(MDTPDeviceId).value
+      val expectedCookie = requestPassedToAction.cookies.get(DeviceIdData.MDTPDeviceId).get
       expectedCookie.value shouldBe newFormatGoodCookieDeviceId.value
 
-      val expectedCookie1 = requestPassedToAction.cookies.get("AnotherCookie1").value
+      val expectedCookie1 = requestPassedToAction.cookies.get("AnotherCookie1").get
       expectedCookie1.value shouldBe "normalValue1"
 
       result.header.headers.get("Set-Cookie") shouldBe None
     }
 
-    "legacy deviceId cookie is converted to new format (carrying over the UUID from the legacy cookie) and response contains a new formatted device Id cookie with the legacy UUID" in new Setup {
+    "auto convert legacy DeviceId cookie to new format (carrying over the UUID from the legacy cookie) and response contains a new formatted device Id cookie with the legacy UUID" in new Setup {
 
       val (legacyDeviceIdCookie, newFormatDeviceIdCookie) = {
         val testUUID = filter.generateUUID
@@ -116,8 +132,8 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with MockitoSugar wi
         val legacyDeviceId = generateDeviceIdLegacy(testUUID)
         val currentDeviceId = filter.generateDeviceId(testUUID)
 
-        val legacyCookieValue = Cookie(MDTPDeviceId, legacyDeviceId.value, Some(TenYears))
-        val newFormatCookieValue = Cookie(MDTPDeviceId, currentDeviceId.value, Some(TenYears))
+        val legacyCookieValue = Cookie(DeviceIdData.MDTPDeviceId, legacyDeviceId.value, Some(DeviceIdData.TenYears))
+        val newFormatCookieValue = Cookie(DeviceIdData.MDTPDeviceId, currentDeviceId.value, Some(DeviceIdData.TenYears))
 
         (legacyCookieValue, newFormatCookieValue)
       }
@@ -125,7 +141,7 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with MockitoSugar wi
       val incomingRequest = FakeRequest().withCookies(legacyDeviceIdCookie)
       val result = filter(action)(incomingRequest).futureValue
 
-      val expectedCookie: Cookie = requestPassedToAction.cookies.get(MDTPDeviceId).value
+      val expectedCookie: Cookie = requestPassedToAction.cookies.get(DeviceIdData.MDTPDeviceId).get
       expectedCookie.value shouldBe newFormatDeviceIdCookie.value
 
       val responseCookieString = result.header.headers.get("Set-Cookie").get
@@ -133,56 +149,75 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with MockitoSugar wi
       getCookieStringValue(responseCookieString)(0) shouldBe newFormatDeviceIdCookie.value
     }
 
-    "legacy deviceId cookie is invalid, filter creates new deviceId cookie and response contains the new deviceId cookie" in new Setup {
+    "identify legacy deviceId cookie is invalid and create new deviceId cookie, response contains the new deviceId cookie" in new Setup {
 
       val legacyFormatBadCookieDeviceId = {
         val legacyDeviceId = generateDeviceIdLegacy().copy(hash="wrongvalue")
-        Cookie(MDTPDeviceId, legacyDeviceId.value, Some(TenYears))
+        Cookie(DeviceIdData.MDTPDeviceId, legacyDeviceId.value, Some(DeviceIdData.TenYears))
       }
 
       val incomingRequest = FakeRequest().withCookies(legacyFormatBadCookieDeviceId)
       val result = filter(action)(incomingRequest).futureValue
 
-      val expectedCookie = requestPassedToAction.cookies.get(MDTPDeviceId).value
+      val expectedCookie = requestPassedToAction.cookies.get(DeviceIdData.MDTPDeviceId).get
       expectedCookie.value shouldBe newFormatGoodCookieDeviceId.value
 
       val responseCookie = result.header.headers.get("Set-Cookie").get
       getCookieStringValue(responseCookie)(0) shouldBe newFormatGoodCookieDeviceId.value
+
+      expectAuditIdEvent(legacyFormatBadCookieDeviceId.value,newFormatGoodCookieDeviceId.value)
     }
 
-    "new format deviceId cookie has invalid hash, filter creates new deviceId cookie and response contains the new deviceId cookie" in new Setup {
+    "identify new format deviceId cookie has invalid hash and create new deviceId cookie, response contains the new deviceId cookie" in new Setup {
 
       val newFormatBadCookieDeviceId = {
         val deviceId = filter.generateDeviceId().copy(hash="wrongvalue")
-        Cookie(MDTPDeviceId, deviceId.value, Some(TenYears))
+        Cookie(DeviceIdData.MDTPDeviceId, deviceId.value, Some(DeviceIdData.TenYears))
       }
 
       val incomingRequest = FakeRequest().withCookies(newFormatBadCookieDeviceId)
       val result = filter(action)(incomingRequest).futureValue
 
-      val expectedCookie = requestPassedToAction.cookies.get(MDTPDeviceId).value
+      val expectedCookie = requestPassedToAction.cookies.get(DeviceIdData.MDTPDeviceId).get
+      expectedCookie.value shouldBe newFormatGoodCookieDeviceId.value
+
+      val responseCookie = result.header.headers.get("Set-Cookie").get
+      getCookieStringValue(responseCookie)(0) shouldBe newFormatGoodCookieDeviceId.value
+
+      expectAuditIdEvent(newFormatBadCookieDeviceId.value,expectedCookie.value)
+    }
+
+    "identify new format deviceId cookie has invalid timestamp and create new deviceId cookie, response contains the new deviceId cookie" in new Setup {
+
+      val newFormatBadCookieDeviceId = {
+        val deviceId = filter.generateDeviceId()
+        val fields = deviceId.value.split(DeviceIdData.token1)
+        val time: Array[String] = fields(2).split(DeviceIdData.token2)
+
+        Cookie(DeviceIdData.MDTPDeviceId, deviceId.value.replace(time(0),"BAD_TIME"), Some(DeviceIdData.TenYears))
+      }
+
+      val incomingRequest = FakeRequest().withCookies(newFormatBadCookieDeviceId)
+      val result = filter(action)(incomingRequest).futureValue
+
+      val expectedCookie = requestPassedToAction.cookies.get(DeviceIdData.MDTPDeviceId).get
       expectedCookie.value shouldBe newFormatGoodCookieDeviceId.value
 
       val responseCookie = result.header.headers.get("Set-Cookie").get
       getCookieStringValue(responseCookie)(0) shouldBe newFormatGoodCookieDeviceId.value
     }
 
-// TODO...PREFIX OF THE COOKIE value ID CHANGES mtdpdi# !!!
-
-    "new format deviceId cookie has invalid timestamp, filter creates new deviceId cookie and response contains the new deviceId cookie" in new Setup {
+    "identify new format deviceId cookie has invalid prefix and create new deviceId cookie, response contains the new deviceId cookie" in new Setup {
 
       val newFormatBadCookieDeviceId = {
         val deviceId = filter.generateDeviceId()
-        val fields = deviceId.value.split("#")
-        val time: Array[String] = fields(2).split("_")
-
-        Cookie(MDTPDeviceId, deviceId.value.replace(time(0),"BADTIME"), Some(TenYears))
+        Cookie(DeviceIdData.MDTPDeviceId, deviceId.value.replace(DeviceIdData.MDTPDeviceId,"BAD_PREFIX"), Some(DeviceIdData.TenYears))
       }
 
       val incomingRequest = FakeRequest().withCookies(newFormatBadCookieDeviceId)
       val result = filter(action)(incomingRequest).futureValue
 
-      val expectedCookie = requestPassedToAction.cookies.get(MDTPDeviceId).value
+      val expectedCookie = requestPassedToAction.cookies.get(DeviceIdData.MDTPDeviceId).get
       expectedCookie.value shouldBe newFormatGoodCookieDeviceId.value
 
       val responseCookie = result.header.headers.get("Set-Cookie").get
@@ -190,5 +225,7 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with MockitoSugar wi
     }
 
   }
+
+
 
 }

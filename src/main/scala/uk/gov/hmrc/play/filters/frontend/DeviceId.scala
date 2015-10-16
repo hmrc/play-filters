@@ -18,47 +18,47 @@ package uk.gov.hmrc.play.filters.frontend
 
 import java.security.MessageDigest
 import java.util.UUID
-
 import org.apache.commons.codec.binary.Base64
-
 import scala.util.Try
 
 
-trait DeviceIdData {
+object DeviceIdData {
   final val token1 = "#"
   final val token2 = "_"
-  final val prefix_value = "mtdpdi"
   final val TenYears = 315360000
   final val MDTPDeviceId = "mdtpdi"
 }
 
-case class DeviceId(uuid: String, timestamp:Option[Long], hash: String) extends DeviceIdData {
+case class DeviceId(uuid: String, timestamp:Option[Long], hash: String) {
 
-  def value = timestamp.fold(s"$uuid$token2$hash")(time => s"${prefix_value}$token1$uuid$token1$time$token2$hash")
+  def value = timestamp.fold(s"$uuid${DeviceIdData.token2}$hash")(time => s"${DeviceIdData.MDTPDeviceId}${DeviceIdData.token1}$uuid${DeviceIdData.token1}$time${DeviceIdData.token2}$hash")
 }
 
-trait DeviceIds extends DeviceIdData {
+trait DeviceIds {
   val secret : String
   val md : MessageDigest
 
+
   def generateHash(uuid:String, timestamp:Option[Long]) = {
-    val oneWayHash = timestamp.fold(uuid)(time => s"${prefix_value}$token1$uuid$token1$time")
+    val oneWayHash = timestamp.fold(uuid)(time => s"${DeviceIdData.MDTPDeviceId}${DeviceIdData.token1}$uuid${DeviceIdData.token1}$time")
     val digest = md.digest((oneWayHash + secret).getBytes)
     new String(Base64.encodeBase64(digest))
   }
 
   def deviceIdHashIsValid(hash:String, uuid:String, timestamp:Option[Long]) = hash == generateHash(uuid, timestamp)
 
-  def from(value: String): Option[DeviceId] = {
+  def from(value: String) : Option[DeviceId] = {
 
     def isValid(uuid:String, timestamp:String, hash:String) = validUuid(uuid) && validLongTime(timestamp) && deviceIdHashIsValid(hash, uuid, Some(timestamp.toLong))
+
+    def isValidLegacy(uuid:String, hash:String) = validUuid(uuid) && deviceIdHashIsValid(hash, uuid, None)
 
     value.split("(#)|(_)") match {
 
       case Array(prefix, uuid, timestamp, hash) if isValid(uuid, timestamp, hash) =>
         Some(DeviceId(uuid, Some(timestamp.toLong), hash))
 
-      case Array(uuid, hash) if validUuid(uuid) && deviceIdHashIsValid(hash, uuid, None) =>
+      case Array(uuid, hash) if isValidLegacy(uuid, hash) =>
         Some(DeviceId(uuid, None, hash))
 
       case _ => None
