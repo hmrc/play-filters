@@ -20,21 +20,22 @@ import java.util.UUID
 
 import play.api.mvc.Cookie
 
-trait DeviceIdFromCookie extends DeviceIds {
+trait DeviceIdCookie {
+  val secret : String
 
-  def getTimeStamp = Some(System.currentTimeMillis())
+  def getTimeStamp = System.currentTimeMillis()
 
   def generateUUID = UUID.randomUUID().toString
 
-  def generateDeviceId(uuid: String = generateUUID): DeviceId = {
-    val timestamp = getTimeStamp
-    DeviceId(uuid, timestamp, generateHash(uuid, timestamp))
+  def generateDeviceId(uuid: String = generateUUID) = {
+    val timestamp = Some(getTimeStamp)
+    DeviceId(uuid, timestamp, DeviceId.generateHash(uuid, timestamp, secret))
   }
 
-  def buildNewDeviceIdCookie(): Cookie = {
+  def buildNewDeviceIdCookie() = {
     val deviceId = generateDeviceId()
     makeCookie(deviceId)
   }
 
-  def makeCookie(deviceId: DeviceId): Cookie = Cookie(DeviceIdData.MDTPDeviceId, deviceId.value, Some(DeviceIdData.TenYears))
+  def makeCookie(deviceId: DeviceId) = Cookie(DeviceId.MdtpDeviceId, deviceId.value, Some(DeviceId.TenYears))
 }
