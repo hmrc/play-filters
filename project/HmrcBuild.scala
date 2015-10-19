@@ -20,7 +20,6 @@ import uk.gov.hmrc.versioning.SbtGitVersioning
 
 object HmrcBuild extends Build {
 
-  import uk.gov.hmrc.DefaultBuildSettings._
   import uk.gov.hmrc._
 
   val appName = "play-filters"
@@ -45,8 +44,8 @@ private object AppDependencies {
 
   val compile = Seq(
     "com.typesafe.play" %% "play" % PlayVersion.current % "provided",
-
-    "uk.gov.hmrc" %% "http-exceptions" % "0.4.0"
+    "uk.gov.hmrc" %% "http-exceptions" % "0.4.0",
+    "uk.gov.hmrc" %% "play-auditing" % "0.2.0"
   )
 
   trait TestDependencies {
@@ -59,6 +58,8 @@ private object AppDependencies {
       override lazy val test = Seq(
         "com.typesafe.play" %% "play-test" % PlayVersion.current % scope,
         "org.scalatest" %% "scalatest" % "2.2.4" % scope,
+        "org.scalactic" %% "scalactic" % "2.2.2" % scope,
+        "uk.gov.hmrc" %% "hmrctest" % "1.4.0" % scope,
         "org.pegdown" % "pegdown" % "1.5.0" % scope
       )
     }.test
