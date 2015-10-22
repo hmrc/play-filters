@@ -47,7 +47,7 @@ trait DeviceIdFilter extends Filter with DeviceIdCookie {
         CookeResult(requestCookies ++ Seq(newDeviceIdCookie), Some(newDeviceIdCookie))
       } { deviceCookeValueId =>
 
-          DeviceId.from(deviceCookeValueId.value, secret) match {
+          DeviceId.from(deviceCookeValueId.value, secret, previousSecrets) match {
 
             case Some(DeviceId(uuid, None, hash)) =>
               // Replace legacy cookie with new format and add new cookie to response.

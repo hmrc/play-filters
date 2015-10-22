@@ -57,15 +57,19 @@ object DeviceId {
     new String(Base64.encodeBase64(digest))
   }
 
-  def deviceIdHashIsValid(hash:String, uuid:String, timestamp:Option[Long], secret:String) = hash == generateHash(uuid, timestamp, secret)
+  def deviceIdHashIsValid(hash:String, uuid:String, timestamp:Option[Long], secret:String, previousSecrets:Seq[String]) = {
+    val secrets = Seq(secret) ++ previousSecrets
+    val hashChecker = secrets.map(item => () => hash == generateHash(uuid, timestamp, item)).toStream
+    hashChecker.map(_()).collectFirst { case true => true }.getOrElse(false)
+  }
 
-  def from(value: String, secret:String) = {
-
+  def from(value: String, secret:String, previousSecrets:Seq[String]) = {
     def isValidPrefix(prefix:String) = prefix == MdtpDeviceId
-    def isValid(prefix:String, uuid:String, timestamp:String, hash:String) =
-      isValidPrefix(prefix) && validUuid(uuid) && validLongTime(timestamp) && deviceIdHashIsValid(hash, uuid, Some(timestamp.toLong), secret)
 
-    def isValidLegacy(uuid:String, hash:String) = validUuid(uuid) && deviceIdHashIsValid(hash, uuid, None, secret)
+    def isValid(prefix:String, uuid:String, timestamp:String, hash:String) =
+      isValidPrefix(prefix) && validUuid(uuid) && validLongTime(timestamp) && deviceIdHashIsValid(hash, uuid, Some(timestamp.toLong), secret, previousSecrets)
+
+    def isValidLegacy(uuid:String, hash:String) = validUuid(uuid) && deviceIdHashIsValid(hash, uuid, None, secret, previousSecrets)
 
     value.split("(#)|(_)") match {
       case Array(prefix, uuid, timestamp, hash) if isValid(prefix, uuid, timestamp, hash) =>

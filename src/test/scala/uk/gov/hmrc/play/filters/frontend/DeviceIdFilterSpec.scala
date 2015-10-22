@@ -16,7 +16,7 @@
 
 package uk.gov.hmrc.play.filters.frontend
 
-import org.mockito.ArgumentCaptor
+import org.mockito.{Mockito, ArgumentCaptor}
 import org.mockito.Matchers._
 import org.mockito.Mockito._
 import org.scalactic.TypeCheckedTripleEquals
@@ -41,7 +41,6 @@ class DeviceIdFilterSpec extends UnitSpec with WithFakeApplication with ScalaFut
   lazy val timestamp = System.currentTimeMillis()
 
   private trait Setup extends Results {
-
     val normalCookie = Cookie("AnotherCookie1", "normalValue1")
 
     val resultFromAction: Result = Ok
@@ -54,7 +53,6 @@ class DeviceIdFilterSpec extends UnitSpec with WithFakeApplication with ScalaFut
     }
 
     lazy val filter = new DeviceIdFilter {
-
       lazy val mdtpCookie = super.buildNewDeviceIdCookie()
 
       override def getTimeStamp = timestamp
@@ -62,6 +60,7 @@ class DeviceIdFilterSpec extends UnitSpec with WithFakeApplication with ScalaFut
       override def buildNewDeviceIdCookie() = mdtpCookie
 
       override val secret = "SOME_SECRET"
+      override val previousSecrets = Seq("previous_key_1", "previous_key_2")
 
       override val appName = "SomeAppName"
 
@@ -71,9 +70,9 @@ class DeviceIdFilterSpec extends UnitSpec with WithFakeApplication with ScalaFut
     lazy val newFormatGoodCookieDeviceId = filter.mdtpCookie
 
 
-    def requestPassedToAction: RequestHeader = {
+    def requestPassedToAction(time:Option[Int]=None): RequestHeader = {
       val updatedRequest = ArgumentCaptor.forClass(classOf[RequestHeader])
-      verify(action).apply(updatedRequest.capture())
+      verify(action, time.fold(times(1))(count=>Mockito.atMost(count))).apply(updatedRequest.capture())
       updatedRequest.getValue
     }
 
@@ -94,14 +93,31 @@ class DeviceIdFilterSpec extends UnitSpec with WithFakeApplication with ScalaFut
     }
 
 
-    def invokeFilter(cookies: Seq[Cookie], expectedResultCookie: Cookie) = {
+    def invokeFilter(cookies: Seq[Cookie], expectedResultCookie: Cookie, times:Option[Int]=None) = {
       val incomingRequest = if (cookies.isEmpty) FakeRequest() else FakeRequest().withCookies(cookies: _*)
       val result = filter(action)(incomingRequest).futureValue
 
-      val expectedCookie = requestPassedToAction.cookies.get(DeviceId.MdtpDeviceId).get
+      val expectedCookie = requestPassedToAction(times).cookies.get(DeviceId.MdtpDeviceId).get
       expectedCookie.value shouldBe expectedResultCookie.value
 
       result
+    }
+  }
+
+  "The filter supporting multiple previous hash secrets" should {
+
+    "successfully validate the hash of deviceId's built from more than one previous key" in new Setup {
+
+      for (prevSecret <- filter.previousSecrets) {
+        val uuid = filter.generateUUID
+        val timestamp = filter.getTimeStamp
+        val deviceIdMadeFromPrevKey = DeviceId(uuid, Some(timestamp), DeviceId.generateHash(uuid, Some(timestamp), prevSecret))
+        val cookie = filter.makeCookie(deviceIdMadeFromPrevKey)
+
+        val result = invokeFilter(Seq(cookie), cookie, Some(2))
+
+        result.header.headers.get("Set-Cookie") shouldBe None
+      }
     }
   }
 
@@ -118,8 +134,8 @@ class DeviceIdFilterSpec extends UnitSpec with WithFakeApplication with ScalaFut
     "not change the request or the response when a valid new format mtdpdi cookie exists" in new Setup {
       val result = invokeFilter(Seq(newFormatGoodCookieDeviceId, normalCookie), newFormatGoodCookieDeviceId)
 
-      val expectedCookie1 = requestPassedToAction.cookies.get("AnotherCookie1").get
-      val expectedCookie2 = requestPassedToAction.cookies.get(DeviceId.MdtpDeviceId).get
+      val expectedCookie1 = requestPassedToAction().cookies.get("AnotherCookie1").get
+      val expectedCookie2 = requestPassedToAction().cookies.get(DeviceId.MdtpDeviceId).get
 
       expectedCookie1.value shouldBe "normalValue1"
       expectedCookie2.value shouldBe newFormatGoodCookieDeviceId.value

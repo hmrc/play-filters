@@ -22,6 +22,7 @@ import play.api.mvc.Cookie
 
 trait DeviceIdCookie {
   val secret : String
+  val previousSecrets: Seq[String]
 
   def getTimeStamp = System.currentTimeMillis()
 
