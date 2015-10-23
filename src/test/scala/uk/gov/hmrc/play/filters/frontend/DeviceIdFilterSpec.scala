@@ -123,6 +123,14 @@ class DeviceIdFilterSpec extends UnitSpec with WithFakeApplication with ScalaFut
 
   "During request pre-processing, the filter" should {
 
+    "create a new deviceId if the deviceId cookie received contains an empty value " in new Setup {
+      val result = invokeFilter(Seq(newFormatGoodCookieDeviceId.copy(value="")), newFormatGoodCookieDeviceId)
+
+      val responseCookie = result.header.headers.get("Set-Cookie").get
+
+      getCookieStringValue(responseCookie)(0) shouldBe newFormatGoodCookieDeviceId.value
+    }
+
     "create new deviceId cookie when no cookies exists" in new Setup {
       val result = invokeFilter(Seq.empty, newFormatGoodCookieDeviceId)
 

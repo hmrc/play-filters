@@ -42,9 +42,9 @@ trait DeviceIdFilter extends Filter with DeviceIdCookie {
     def allCookiesApartFromDeviceId = requestCookies.filterNot(_.name == DeviceId.MdtpDeviceId)
 
     val cookieResult = requestCookies.collectFirst(findDeviceIdCookie).fold {
-        // No deviceId cookie found. Create new deviceId cookie, add to request and response.
+        // No deviceId cookie found or empty cookie value. Create new deviceId cookie, add to request and response.
         val newDeviceIdCookie = buildNewDeviceIdCookie()
-        CookeResult(requestCookies ++ Seq(newDeviceIdCookie), Some(newDeviceIdCookie))
+        CookeResult(allCookiesApartFromDeviceId ++ Seq(newDeviceIdCookie), Some(newDeviceIdCookie))
       } { deviceCookeValueId =>
 
           DeviceId.from(deviceCookeValueId.value, secret, previousSecrets) match {
