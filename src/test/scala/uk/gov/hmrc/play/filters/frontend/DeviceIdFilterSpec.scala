@@ -89,7 +89,7 @@ class DeviceIdFilterSpec extends UnitSpec with WithFakeApplication with ScalaFut
       event.auditSource shouldBe "SomeAppName"
 
       event.detail should contain("tamperedDeviceId" -> badCookie)
-      event.detail should contain("newDeviceId" -> validCookie)
+      event.detail should contain("DeviceID" -> validCookie)
     }
 
 

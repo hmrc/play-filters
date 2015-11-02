@@ -87,6 +87,6 @@ trait DeviceIdFilter extends Filter with DeviceIdCookie {
 
   private def getTamperDetails(tamperDeviceId :String, newDeviceId:String) =
     Map("tamperedDeviceId"  -> tamperDeviceId,
-        "newDeviceId"       -> newDeviceId)
+        "DeviceID"       -> newDeviceId)
 
 }
