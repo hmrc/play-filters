@@ -16,19 +16,23 @@
 
 package uk.gov.hmrc.play.filters.frontend
 
+import ch.qos.logback.classic.Level
 import org.mockito.ArgumentCaptor
 import org.mockito.Matchers._
 import org.mockito.Mockito._
 import org.scalactic.TypeCheckedTripleEquals
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mock.MockitoSugar
-import org.scalatest.{Inspectors, Matchers, OptionValues, WordSpecLike}
+import org.scalatest._
+import play.api.Logger
 import play.api.mvc._
 import play.api.test.FakeRequest
+import uk.gov.hmrc.play.filters.LogCapturing
+import uk.gov.hmrc.play.test.UnitSpec
 
 import scala.concurrent.Future
 
-class CookieCryptoFilterSpec extends WordSpecLike with Matchers with MockitoSugar with OptionValues with ScalaFutures with TypeCheckedTripleEquals with Inspectors {
+class CookieCryptoFilterSpec extends UnitSpec with ScalaFutures with Matchers with LogCapturing with LoneElement with MockitoSugar with TypeCheckedTripleEquals {
 
   private trait Setup extends Results {
     implicit val headerEquiv = RequestHeaderEquivalence
@@ -114,8 +118,11 @@ class CookieCryptoFilterSpec extends WordSpecLike with Matchers with MockitoSuga
 
     "remove the cookie (but leave other cookies intact) if with the decryption fails" in new Setup {
       val incomingRequest = FakeRequest().withCookies(normalCookie1, corruptEncryptedCookie, normalCookie2)
-      filter(action)(incomingRequest)
-      requestPassedToAction should ===(FakeRequest().withCookies(normalCookie1, normalCookie2))
+      withCaptureOfLoggingFrom(Logger) { logEvents =>
+        filter(action)(incomingRequest)
+        requestPassedToAction should === (FakeRequest().withCookies(normalCookie1, normalCookie2))
+        logEvents().filter(_.getLevel == Level.WARN).loneElement.toString should include("Could not decrypt cookie")
+      }
     }
   }
 
