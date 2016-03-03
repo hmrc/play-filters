@@ -33,32 +33,15 @@ trait CookieCryptoFilter extends Filter {
   override def apply(next: (RequestHeader) => Future[Result])(rh: RequestHeader) =
     encryptCookie(next(decryptCookie(rh)))
 
-  private def encryptCookieString(cookieValue: String): String = encrypter(cookieValue)
-
-  private def decryptCookieString(encryptedCookieValue: String): String = {
-
-    def decryptValue(value: String) = Try(decrypter(value)) match {
-      case Success(result) => result
-      case Failure(ex) =>
-        Logger.debug("Decryption of session cookie failed!")
-        throw ex
-    }
-
-    decryptValue(encryptedCookieValue)
-  }
-
-
   private def decryptCookie(rh: RequestHeader) = rh.copy(headers = new Headers {
+
     override protected val data: Seq[(String, Seq[String])] = {
-      val updatedCookies = rh.headers.getAll(HeaderNames.COOKIE).flatMap(Cookies.decode).flatMap {
-        case cookie if shouldBeEncrypted(cookie) =>
-          decryptValue(cookie.value)
-            .map(dv => cookie.copy(value = dv))
-            .orElse {
-            Logger.debug(s"Could not decrypt cookie $cookieName"); None
-          }
-        case other => Some(other)
-      }
+      val updatedCookies = (
+        for {
+        cookie <- rh.headers.getAll(HeaderNames.COOKIE)
+        decoded <- Cookies.decode(cookie)
+        decrypted = decrypt(decoded)
+      } yield decrypted).flatten
 
       if (updatedCookies.isEmpty)
         rh.headers.toMap - HeaderNames.COOKIE
@@ -66,10 +49,21 @@ trait CookieCryptoFilter extends Filter {
         rh.headers.toMap + (HeaderNames.COOKIE -> Seq(Cookies.encode(updatedCookies)))
     }.toSeq
 
-    def decryptValue(value: String): Option[String] = Try(decryptCookieString(value)) match {
-      case Success(v) => Option(v)
-      case _ => None
+    def tryDecrypting(value: String): Option[String] = Try(decrypter(value)) match {
+      case Success(v) => Some(v)
+      case Failure(ex) =>
+        Logger.warn(s"Could not decrypt cookie $cookieName got exception:${ex.getMessage}")
+        None
     }
+
+    def decrypt(cookie: Cookie): Option[Cookie] = {
+      if (shouldBeEncrypted(cookie))
+        tryDecrypting(cookie.value).map { decryptedValue =>
+          cookie.copy(value = decryptedValue)
+        }
+      else Some(cookie)
+    }
+
   })
 
   private def encryptCookie(f: Future[Result]): Future[Result] = f.map {
@@ -77,7 +71,7 @@ trait CookieCryptoFilter extends Filter {
       val updatedHeader: Option[String] = result.header.headers.get(HeaderNames.SET_COOKIE).map {
         cookieHeader =>
           Cookies.encode(Cookies.decode(cookieHeader).map {
-            case cookie if shouldBeEncrypted(cookie) => cookie.copy(value = encryptCookieString(cookie.value))
+            case cookie if shouldBeEncrypted(cookie) => cookie.copy(value = encrypter(cookie.value))
             case other => other
           })
       }
