@@ -16,11 +16,14 @@
 
 package uk.gov.hmrc.play.filters
 
+import java.security.cert.X509Certificate
+
 import org.scalatest.{Matchers, WordSpecLike}
 import org.scalatest.concurrent.ScalaFutures
-import play.api.mvc.{Headers, RequestHeader, Action, EssentialAction}
+import play.api.mvc.{Action, EssentialAction, Headers, RequestHeader}
 import play.api.test.{FakeHeaders, WithApplication}
 import uk.gov.hmrc.play.http.{HttpException, NotFoundException}
+
 import scala.concurrent.Future
 
 class RecoveryFilterSpec extends WordSpecLike with Matchers with ScalaFutures {
@@ -71,4 +74,6 @@ class DummyRequestHeader extends RequestHeader {
   override def id: Long = ???
 
   override def secure: Boolean = false
+
+  override def clientCertificateChain: Option[Seq[X509Certificate]] = None
 }

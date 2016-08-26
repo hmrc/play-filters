@@ -18,11 +18,12 @@ package uk.gov.hmrc.play.filters.frontend
 
 import org.joda.time.{DateTime, DateTimeZone}
 import play.api.mvc.{Result, _}
+import uk.gov.hmrc.play.filters.MicroserviceFilterSupport
 import uk.gov.hmrc.play.filters.frontend.SessionTimeoutWrapper._
 
 import scala.concurrent.Future
 
-object CSRFExceptionsFilter extends Filter {
+object CSRFExceptionsFilter extends Filter with MicroserviceFilterSupport {
 
   val whitelist = List("/ida/login", "/ssoin", "/contact/problem_reports")
 
@@ -32,12 +33,7 @@ object CSRFExceptionsFilter extends Filter {
 
   private[filters] def filteredHeaders(rh: RequestHeader, now: () => DateTime = () => DateTime.now.withZone(DateTimeZone.UTC)) =
     if (rh.method == "POST" && (userNeedsNewSession(rh.session, now) || whitelist.contains(rh.path)))
-      rh.copy(headers = new CustomHeaders(rh))
+      rh.copy(headers = rh.headers.add("Csrf-Token" -> "nocheck"))
     else rh
 
-  private class CustomHeaders(rh: RequestHeader) extends Headers {
-    protected val data: Seq[(String, Seq[String])] = {
-      rh.headers.toMap.toList :+ ("Csrf-Token" -> Seq("nocheck"))
-    }
-  }
 }

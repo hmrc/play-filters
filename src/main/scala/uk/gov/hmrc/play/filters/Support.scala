@@ -16,16 +16,15 @@
 
 package uk.gov.hmrc.play.filters
 
-import play.api.mvc.{Result, RequestHeader, Filter}
-import scala.concurrent.Future
-import scala.concurrent.ExecutionContext.Implicits.global
-import play.mvc.Http.HeaderNames
+import akka.stream.Materializer
+import play.api.Play
+import play.api.Play.current
+import play.api.mvc.Filter
 
-object NoCacheFilter extends Filter with MicroserviceFilterSupport {
+trait Materializers {
+  implicit val materializer = Play.materializer
+}
 
-  private val NoCache = "no-cache,no-store,max-age=0"
-
-  def apply(next: (RequestHeader) => Future[Result])(rh: RequestHeader): Future[Result] = {
-    next(rh).map(_.withHeaders(HeaderNames.CACHE_CONTROL -> NoCache))
-  }
+trait MicroserviceFilterSupport extends Filter with Materializers {
+  override implicit def mat: Materializer = materializer
 }

@@ -16,23 +16,24 @@
 
 package uk.gov.hmrc.play.filters
 
-import play.api.mvc._
-import play.api.libs.concurrent.Execution.Implicits._
-import play.api.libs.iteratee._
-import uk.gov.hmrc.play.http.HttpException
+import akka.util.ByteString
 import play.api.http.Status._
+import play.api.libs.concurrent.Execution.Implicits._
+import play.api.libs.streams.Accumulator
+import play.api.mvc._
+import uk.gov.hmrc.play.http.HttpException
 
 
 object RecoveryFilter extends EssentialFilter with Results {
-  override def apply(next: EssentialAction): EssentialAction = new EssentialAction  {
-      def apply(rh: RequestHeader): Iteratee[Array[Byte], Result] = {
-        Iteratee.flatten(next(rh).unflatten.map(_.it).recover(recoverErrors))
-      }
+
+  override def apply(next: EssentialAction): EssentialAction = new EssentialAction {
+    def apply(rh: RequestHeader): Accumulator[ByteString, Result] = {
+      next(rh).recover(recoverErrors)
+    }
   }
 
-  def recoverErrors: PartialFunction[Throwable, Iteratee[Array[Byte], Result]] = {
-    case e: HttpException if e.responseCode == NOT_FOUND => respondWith(new Status(e.responseCode)(e.getMessage))
+  def recoverErrors: PartialFunction[Throwable, Result] = {
+    case e: HttpException if e.responseCode == NOT_FOUND => new Status(e.responseCode)(e.getMessage)
   }
 
-  def respondWith(result: Result): Iteratee[Array[Byte], Result] = Done(result, Input.Empty)
 }

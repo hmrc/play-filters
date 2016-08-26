@@ -16,6 +16,7 @@
 
 package uk.gov.hmrc.play.filters.frontend
 
+import akka.stream.Materializer
 import play.api.Logger
 import play.api.http.HeaderNames
 import play.api.mvc._
@@ -26,6 +27,8 @@ import scala.util.{Failure, Success, Try}
 
 trait CookieCryptoFilter extends Filter {
 
+  implicit def mat: Materializer
+
   protected val cookieName: String = Session.COOKIE_NAME
   protected val encrypter: (String) => String
   protected val decrypter: (String) => String
@@ -33,46 +36,45 @@ trait CookieCryptoFilter extends Filter {
   override def apply(next: (RequestHeader) => Future[Result])(rh: RequestHeader) =
     encryptCookie(next(decryptCookie(rh)))
 
-  private def decryptCookie(rh: RequestHeader) = rh.copy(headers = new Headers {
-
-    override protected val data: Seq[(String, Seq[String])] = {
-      val updatedCookies = (
-        for {
+  private def decryptCookie(rh: RequestHeader) = {
+    val updatedCookies = (
+      for {
         cookie <- rh.headers.getAll(HeaderNames.COOKIE)
-        decoded <- Cookies.decode(cookie)
+        decoded <- Cookies.decodeCookieHeader(cookie)
         decrypted = decrypt(decoded)
       } yield decrypted).flatten
 
-      if (updatedCookies.isEmpty)
-        rh.headers.toMap - HeaderNames.COOKIE
-      else
-        rh.headers.toMap + (HeaderNames.COOKIE -> Seq(Cookies.encode(updatedCookies)))
-    }.toSeq
+    if (updatedCookies.isEmpty)
+      rh.copy(headers = rh.headers.remove(HeaderNames.COOKIE))
+    else
+      rh.copy(headers = rh.headers.replace(HeaderNames.COOKIE -> Cookies.encodeCookieHeader(updatedCookies)))
+  }
 
-    def tryDecrypting(value: String): Option[String] = Try(decrypter(value)) match {
-      case Success(v) => Some(v)
-      case Failure(ex) =>
-        Logger.warn(s"Could not decrypt cookie $cookieName got exception:${ex.getMessage}")
-        None
-    }
+  def tryDecrypting(value: String): Option[String] = Try(decrypter(value)) match {
+    case Success(v) => Some(v)
+    case Failure(ex) =>
+      Logger.warn(s"Could not decrypt cookie $cookieName got exception:${ex.getMessage}")
+      None
+  }
 
-    def decrypt(cookie: Cookie): Option[Cookie] = {
-      if (shouldBeEncrypted(cookie))
-        tryDecrypting(cookie.value).map { decryptedValue =>
-          cookie.copy(value = decryptedValue)
-        }
-      else Some(cookie)
-    }
+  def decrypt(cookie: Cookie): Option[Cookie] = {
+    if (shouldBeEncrypted(cookie))
+      tryDecrypting(cookie.value).map { decryptedValue =>
+        cookie.copy(value = decryptedValue)
+      }
+    else Some(cookie)
+  }
 
-  })
 
   private def encryptCookie(f: Future[Result]): Future[Result] = f.map {
     result =>
       val updatedHeader: Option[String] = result.header.headers.get(HeaderNames.SET_COOKIE).map {
         cookieHeader =>
-          Cookies.encode(Cookies.decode(cookieHeader).map {
-            case cookie if shouldBeEncrypted(cookie) => cookie.copy(value = encrypter(cookie.value))
-            case other => other
+          Cookies.encodeSetCookieHeader(Cookies.decodeSetCookieHeader(cookieHeader).map { cookie: Cookie =>
+            if (shouldBeEncrypted(cookie))
+              cookie.copy(value = encrypter(cookie.value))
+            else
+              cookie
           })
       }
 
