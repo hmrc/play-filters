@@ -16,7 +16,9 @@
 
 package uk.gov.hmrc.play.filters.frontend
 
-import org.mockito.{Mockito, ArgumentCaptor}
+import akka.actor.ActorSystem
+import akka.stream.{ActorMaterializer, Materializer}
+import org.mockito.{ArgumentCaptor, Mockito}
 import org.mockito.Matchers._
 import org.mockito.Mockito._
 import org.scalactic.TypeCheckedTripleEquals
@@ -26,7 +28,7 @@ import org.scalatest.mock.MockitoSugar
 import play.api.mvc._
 import play.api.test.{FakeApplication, FakeRequest}
 import uk.gov.hmrc.play.audit.http.connector.AuditConnector
-import uk.gov.hmrc.play.audit.model.{EventTypes, DataEvent}
+import uk.gov.hmrc.play.audit.model.{DataEvent, EventTypes}
 import uk.gov.hmrc.play.test.{UnitSpec, WithFakeApplication}
 
 import scala.concurrent.Future
@@ -53,6 +55,9 @@ class DeviceIdFilterSpec extends UnitSpec with WithFakeApplication with ScalaFut
     }
 
     lazy val filter = new DeviceIdFilter {
+      implicit val system = ActorSystem("test")
+      implicit val mat: Materializer = ActorMaterializer()
+
       lazy val mdtpCookie = super.buildNewDeviceIdCookie()
 
       override def getTimeStamp = timestamp
@@ -207,17 +212,17 @@ class DeviceIdFilterSpec extends UnitSpec with WithFakeApplication with ScalaFut
     "identify new format deviceId cookie has invalid timestamp and create new deviceId cookie" in new Setup {
 
       val newFormatBadCookieDeviceId = {
-        val deviceId = filter.generateDeviceId()
-        val fields = deviceId.value.split(DeviceId.Token1)
-        val time: Array[String] = fields(2).split(DeviceId.Token2)
-
-        Cookie(DeviceId.MdtpDeviceId, deviceId.value.replace(time(0),"BAD TIME"), Some(DeviceId.TenYears))
+        val deviceId = filter.generateDeviceId().copy(hash="wrongvalue")
+        Cookie(DeviceId.MdtpDeviceId, deviceId.value, Some(DeviceId.TenYears))
       }
 
       val result = invokeFilter(Seq(newFormatBadCookieDeviceId), newFormatGoodCookieDeviceId)
 
+
       val responseCookie = result.header.headers.get("Set-Cookie").get
       getCookieStringValue(responseCookie)(0) shouldBe newFormatGoodCookieDeviceId.value
+
+      expectAuditIdEvent(newFormatBadCookieDeviceId.value,newFormatGoodCookieDeviceId.value)
     }
 
     "identify new format deviceId cookie has invalid prefix and create new deviceId cookie" in new Setup {

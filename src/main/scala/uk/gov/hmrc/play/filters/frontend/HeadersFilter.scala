@@ -18,7 +18,8 @@ package uk.gov.hmrc.play.filters.frontend
 
 import java.util.UUID
 
-import play.api.libs.iteratee.Iteratee
+import akka.util.ByteString
+import play.api.libs.streams.Accumulator
 import play.api.mvc._
 
 object HeadersFilter extends HeadersFilter
@@ -29,7 +30,7 @@ trait HeadersFilter extends EssentialFilter {
   val xRequestTimestamp = "X-Request-Timestamp"
 
   def apply(nextAction: EssentialAction): EssentialAction = new EssentialAction {
-    def apply(request: RequestHeader): Iteratee[Array[Byte], Result] = {
+    def apply(request: RequestHeader): Accumulator[ByteString, Result] = {
       request.session.get(xRequestId) match {
         case Some(s) => nextAction(request)
         case _ => nextAction(addHeaders(request))
@@ -38,13 +39,9 @@ trait HeadersFilter extends EssentialFilter {
 
     def addHeaders(request: RequestHeader): RequestHeader = {
       val rid = s"govuk-tax-${UUID.randomUUID().toString}"
-      val requestIdHeader = xRequestId -> Seq(rid)
-      val requestTimestampHeader = xRequestTimestamp -> Seq(System.nanoTime().toString)
-
-      val newHeaders = new Headers {
-        val data: Seq[(String, Seq[String])] = (request.headers.toMap + requestIdHeader + requestTimestampHeader).toSeq
-      }
-
+      val requestIdHeader = xRequestId -> rid
+      val requestTimestampHeader = xRequestTimestamp -> System.nanoTime().toString
+      val newHeaders = request.headers.add(requestIdHeader, requestTimestampHeader)
       request.copy(headers = newHeaders)
     }
   }

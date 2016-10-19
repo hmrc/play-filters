@@ -19,16 +19,18 @@ package uk.gov.hmrc.play.filters
 import org.mockito.ArgumentCaptor
 import org.mockito.Matchers._
 import org.mockito.Mockito._
-import org.scalatest.{Matchers, WordSpecLike}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mock.MockitoSugar
+import org.scalatest.{Matchers, WordSpecLike}
+import org.scalatestplus.play.OneAppPerTest
 import play.api.http.HeaderNames
+import play.api.inject.guice.GuiceApplicationBuilder
 import play.api.mvc.{Result, _}
-import play.api.test.{FakeApplication, _}
+import play.api.test._
 
 import scala.concurrent.Future
 
-class CacheControlFilterSpec extends WordSpecLike with Matchers with MockitoSugar with ScalaFutures {
+class CacheControlFilterSpec extends WordSpecLike with Matchers with MockitoSugar with ScalaFutures with OneAppPerTest {
 
   private trait Setup extends Results {
 
@@ -58,7 +60,7 @@ class CacheControlFilterSpec extends WordSpecLike with Matchers with MockitoSuga
 
     "do nothing, just pass on the request" in new Setup {
       cacheControlFilter(action)(FakeRequest())
-      requestPassedToAction should === (FakeRequest())
+      requestPassedToAction should ===(FakeRequest())
     }
   }
 
@@ -109,11 +111,8 @@ class CacheControlFilterSpec extends WordSpecLike with Matchers with MockitoSuga
   }
 
   "Creating the filter from config" should {
-    "load the correct values" in new WithApplication(FakeApplication(additionalConfiguration = Map("caching" -> List("image/", "text/")))) {
-      CacheControlFilter.fromConfig("caching").cachableContentTypes should be (List("image/", "text/"))
-    }
-    "throw an exception on missing config" in  {
-      an [RuntimeException] should be thrownBy CacheControlFilter.fromConfig("caching").cachableContentTypes
+    "load the correct values" in new WithApplication(new GuiceApplicationBuilder().configure("caching" -> List("image/", "text/")).build()) {
+      CacheControlFilter.fromConfig("caching").cachableContentTypes should be(List("image/", "text/"))
     }
   }
 }
