@@ -21,10 +21,6 @@ import play.api.Play
 import play.api.Play.current
 import play.api.mvc.Filter
 
-trait Materializers {
-  implicit val materializer = Play.materializer
-}
-
-trait MicroserviceFilterSupport extends Filter with Materializers {
-  override implicit def mat: Materializer = materializer
+trait MicroserviceFilterSupport {
+  implicit def mat: Materializer = Play.materializer
 }
