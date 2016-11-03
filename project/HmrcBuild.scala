@@ -60,7 +60,6 @@ private object AppDependencies {
         "org.scalatest" %% "scalatest" % "2.2.4" % scope,
         "org.scalatestplus.play" %% "scalatestplus-play" % "1.5.1" %  scope,
         "org.scalactic" %% "scalactic" % "2.2.2" % scope,
-        "uk.gov.hmrc" %% "hmrctest" % "2.0.0" % scope,
         "org.pegdown" % "pegdown" % "1.5.0" % scope,
         "org.mockito" % "mockito-all" % "1.9.5" % "test"
       )
