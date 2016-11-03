@@ -30,11 +30,10 @@ import play.api.Logger
 import play.api.mvc._
 import play.api.test.FakeRequest
 import uk.gov.hmrc.play.filters.LogCapturing
-import uk.gov.hmrc.play.test.UnitSpec
 
 import scala.concurrent.Future
 
-class CookieCryptoFilterSpec extends UnitSpec with ScalaFutures with Matchers with LogCapturing with LoneElement with MockitoSugar with TypeCheckedTripleEquals {
+class CookieCryptoFilterSpec extends WordSpecLike with ScalaFutures with Matchers with LogCapturing with LoneElement with MockitoSugar with TypeCheckedTripleEquals {
 
   private trait Setup extends Results {
     implicit val headerEquiv = RequestHeaderEquivalence

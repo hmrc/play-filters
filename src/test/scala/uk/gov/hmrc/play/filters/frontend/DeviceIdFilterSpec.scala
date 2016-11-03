@@ -25,20 +25,15 @@ import org.scalactic.TypeCheckedTripleEquals
 import org.scalatest._
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.mock.MockitoSugar
+import org.scalatestplus.play.OneAppPerSuite
 import play.api.mvc._
-import play.api.test.{FakeApplication, FakeRequest}
+import play.api.test.FakeRequest
 import uk.gov.hmrc.play.audit.http.connector.AuditConnector
 import uk.gov.hmrc.play.audit.model.{DataEvent, EventTypes}
-import uk.gov.hmrc.play.test.{UnitSpec, WithFakeApplication}
 
 import scala.concurrent.Future
 
-trait FakePlayApplication extends WithFakeApplication {
-  this: Suite =>
-  override lazy val fakeApplication = FakeApplication()
-}
-
-class DeviceIdFilterSpec extends UnitSpec with WithFakeApplication with ScalaFutures with MockitoSugar with BeforeAndAfterEach with FakePlayApplication with TypeCheckedTripleEquals with Inspectors {
+class DeviceIdFilterSpec extends WordSpecLike with Matchers with OneAppPerSuite with ScalaFutures with MockitoSugar with BeforeAndAfterEach with TypeCheckedTripleEquals with Inspectors {
 
   lazy val timestamp = System.currentTimeMillis()
 
