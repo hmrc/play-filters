@@ -44,7 +44,7 @@ private object AppDependencies {
 
   val compile = Seq(
     "com.typesafe.play" %% "play" % PlayVersion.current % "provided",
-    "uk.gov.hmrc" %% "play-auditing" % "2.3.0"
+    "uk.gov.hmrc" %% "play-auditing" % "2.4.0"
   )
 
   trait TestDependencies {
