@@ -21,13 +21,11 @@ import java.util.UUID
 import akka.util.ByteString
 import play.api.libs.streams.Accumulator
 import play.api.mvc._
+import uk.gov.hmrc.play.http.HeaderNames.{xRequestId, xRequestTimestamp}
 
 object HeadersFilter extends HeadersFilter
 
 trait HeadersFilter extends EssentialFilter {
-
-  val xRequestId = "X-Request-ID"
-  val xRequestTimestamp = "X-Request-Timestamp"
 
   def apply(nextAction: EssentialAction): EssentialAction = new EssentialAction {
     def apply(request: RequestHeader): Accumulator[ByteString, Result] = {
