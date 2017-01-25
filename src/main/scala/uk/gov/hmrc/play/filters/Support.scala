@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 HM Revenue & Customs
+ * Copyright 2017 HM Revenue & Customs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,11 @@ import akka.stream.Materializer
 import play.api.Play
 import play.api.Play.current
 import play.api.mvc.Filter
+import play.mvc.Http.HeaderNames
+
+object CommonHeaders {
+  val NoCacheHeader = HeaderNames.CACHE_CONTROL -> "no-cache,no-store,max-age=0"
+}
 
 trait MicroserviceFilterSupport {
   implicit def mat: Materializer = Play.materializer

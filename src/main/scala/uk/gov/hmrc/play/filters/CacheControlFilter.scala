@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 HM Revenue & Customs
+ * Copyright 2017 HM Revenue & Customs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ abstract class CacheControlFilter extends Filter with MicroserviceFilterSupport 
       (r.header.status, r.body.contentType) match {
         case (Status.NOT_MODIFIED, _) => r
         case (_, Some(contentType)) if cachableContentTypes.exists(contentType.startsWith) => r
-        case _ => r.withHeaders(HeaderNames.CACHE_CONTROL -> "no-cache,no-store,max-age=0")
+        case _ => r.withHeaders(CommonHeaders.NoCacheHeader)
       }
     )
 
