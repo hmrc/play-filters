@@ -16,19 +16,24 @@
 
 package uk.gov.hmrc.play.filters
 
-import play.api.mvc.{Result, RequestHeader, Filter}
-import scala.concurrent.Future
-import scala.concurrent.ExecutionContext.Implicits.global
+import play.api.mvc.{Filter, RequestHeader, Result}
 import play.mvc.Http.HeaderNames
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 /**
   * This filter adds Cache-Control: no-cache,no-store,max-age=0 headers
-  * to all responses overriding any existing Cache-Control headers.
+  * to any responses that do not already have a Cache-Control header.
   */
-
-object NoCacheFilter extends Filter with MicroserviceFilterSupport {
+object DefaultToNoCacheFilter extends Filter with MicroserviceFilterSupport {
 
   def apply(next: (RequestHeader) => Future[Result])(rh: RequestHeader): Future[Result] = {
-    next(rh).map(_.withHeaders(CommonHeaders.NoCacheHeader))
+    next(rh).map { r =>
+      r.header.headers.get(HeaderNames.CACHE_CONTROL) match {
+        case Some(_) => r
+        case _ => r.withHeaders(CommonHeaders.NoCacheHeader)
+      }
+    }
   }
 }
