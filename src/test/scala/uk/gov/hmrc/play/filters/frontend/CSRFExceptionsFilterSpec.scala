@@ -17,67 +17,45 @@
 package uk.gov.hmrc.play.filters.frontend
 
 import org.joda.time.{DateTime, DateTimeZone}
-import org.scalatest.mock.MockitoSugar
+import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{Matchers, WordSpecLike}
-import play.api.mvc.AnyContentAsEmpty
-import play.api.test.{WithApplication, FakeHeaders, FakeRequest}
+import play.api.mvc.{AnyContentAsEmpty, RequestHeader}
+import play.api.test.{FakeHeaders, FakeRequest, WithApplication}
 
-class CSRFExceptionsFilterSpec extends WordSpecLike with Matchers with MockitoSugar {
+import play.api.http.HttpVerbs._
 
-  private val now = () =>  DateTime.now().withZone(DateTimeZone.UTC)
+class CSRFExceptionsFilterSpec extends WordSpecLike with Matchers with ScalaFutures {
+
+  private val now = () => DateTime.now().withZone(DateTimeZone.UTC)
+  private val csrfTokenKey = "Csrf-Token"
+
+  private def csrfToken(rh: RequestHeader): Option[String] = rh.headers.get(csrfTokenKey)
 
   "CSRF exceptions filter" should {
 
-    "do nothing if POST request and not ida/login" in new WithApplication {
-      val validTime = now().minusSeconds(SessionTimeoutWrapper.timeoutSeconds/2).getMillis.toString
-      val rh = FakeRequest("POST", "/something", FakeHeaders(), AnyContentAsEmpty).withSession("ts" -> validTime)
+    "do nothing if POST request and not in whitelist" in new WithApplication {
+      val rh = FakeRequest(POST, "/something", FakeHeaders(), AnyContentAsEmpty).withHeaders(csrfTokenKey -> "token")
 
-      val requestHeader = CSRFExceptionsFilter.filteredHeaders(rh, now)
+      val filter = CSRFExceptionsFilter
 
-      requestHeader.headers.get("Csrf-Token") shouldBe None
+      csrfToken(filter.filteredHeaders(rh)) shouldBe Some("token")
     }
 
     "do nothing for GET requests" in new WithApplication {
-      val rh = FakeRequest("GET", "/ida/login", FakeHeaders(), AnyContentAsEmpty)
+      val rh = FakeRequest(GET, "/ida/login", FakeHeaders(), AnyContentAsEmpty).withHeaders(csrfTokenKey -> "token")
 
-      val requestHeader = CSRFExceptionsFilter.filteredHeaders(rh)
+      val filter = new CSRFExceptionsFilter(Set("/ida/login"))
 
-      requestHeader.headers.get("Csrf-Token") shouldBe None
+      csrfToken(filter.filteredHeaders(rh)) shouldBe Some("token")
     }
 
-    "add Csrf-Token header with value nocheck to bypass validation for ida/login POST request" in new WithApplication {
-      val rh = FakeRequest("POST", "/ida/login", FakeHeaders(), AnyContentAsEmpty)
+    "add Csrf-Token header with value nocheck to bypass validation for white-listed POST request" in new WithApplication {
+      val rh = FakeRequest(POST, "/ida/login", FakeHeaders(), AnyContentAsEmpty)
 
-      val requestHeader = CSRFExceptionsFilter.filteredHeaders(rh)
+      val filter = new CSRFExceptionsFilter(Set("/ida/login"))
 
-      requestHeader.headers("Csrf-Token") shouldBe "nocheck"
+      csrfToken(filter.filteredHeaders(rh)) shouldBe Some("nocheck")
     }
-
-    "add Csrf-Token header with value nocheck to bypass validation for SSO POST request" in new WithApplication {
-      val rh = FakeRequest("POST", "/ssoin", FakeHeaders(), AnyContentAsEmpty)
-
-      val requestHeader = CSRFExceptionsFilter.filteredHeaders(rh)
-
-      requestHeader.headers("Csrf-Token") shouldBe "nocheck"
-    }
-
-    "add Csrf-Token header with value nocheck to bypass validation of posting using cached HTML partial for error reporting" in new WithApplication {
-      val rh = FakeRequest("POST", "/contact/problem_reports", FakeHeaders(), AnyContentAsEmpty)
-
-      val requestHeader = CSRFExceptionsFilter.filteredHeaders(rh)
-
-      requestHeader.headers("Csrf-Token") shouldBe "nocheck"
-    }
-
-    "add Csrf-Token header with value nocheck to bypass validation if the session has expired" in new WithApplication {
-      val invalidTime = new DateTime(2012, 7, 7, 4, 6, 20, DateTimeZone.UTC).minusDays(1).getMillis.toString
-      val rh = FakeRequest("POST", "/some/post", FakeHeaders(), AnyContentAsEmpty).withSession("ts" -> invalidTime)
-
-      val requestHeader = CSRFExceptionsFilter.filteredHeaders(rh, now)
-
-      requestHeader.headers("Csrf-Token") shouldBe "nocheck"
-    }
-
   }
 
 }
