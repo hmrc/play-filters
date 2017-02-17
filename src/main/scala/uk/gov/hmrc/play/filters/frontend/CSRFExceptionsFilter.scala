@@ -17,23 +17,23 @@
 package uk.gov.hmrc.play.filters.frontend
 
 import org.joda.time.{DateTime, DateTimeZone}
+import play.api.http.HttpVerbs.POST
 import play.api.mvc.{Result, _}
 import uk.gov.hmrc.play.filters.MicroserviceFilterSupport
-import uk.gov.hmrc.play.filters.frontend.SessionTimeoutWrapper._
 
 import scala.concurrent.Future
 
-object CSRFExceptionsFilter extends Filter with MicroserviceFilterSupport {
-
-  val whitelist = List("/ida/login", "/ssoin", "/contact/problem_reports")
+class CSRFExceptionsFilter(whitelist: Set[String]) extends Filter with MicroserviceFilterSupport {
 
   def apply(f: (RequestHeader) => Future[Result])(rh: RequestHeader): Future[Result] = {
-     f(filteredHeaders(rh))
+    f(filteredHeaders(rh))
   }
 
   private[filters] def filteredHeaders(rh: RequestHeader, now: () => DateTime = () => DateTime.now.withZone(DateTimeZone.UTC)) =
-    if (rh.method == "POST" && (userNeedsNewSession(rh.session, now) || whitelist.contains(rh.path)))
+    if (rh.method == POST && whitelist.contains(rh.path))
       rh.copy(headers = rh.headers.add("Csrf-Token" -> "nocheck"))
     else rh
 
 }
+
+object CSRFExceptionsFilter extends CSRFExceptionsFilter(Set.empty)
