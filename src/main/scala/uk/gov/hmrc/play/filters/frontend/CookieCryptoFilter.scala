@@ -29,7 +29,7 @@ trait CookieCryptoFilter extends Filter {
 
   implicit def mat: Materializer
 
-  protected val cookieName: String = Session.COOKIE_NAME
+  protected lazy val cookieName: String = Session.COOKIE_NAME
   protected val encrypter: (String) => String
   protected val decrypter: (String) => String
 
