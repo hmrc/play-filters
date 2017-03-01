@@ -61,7 +61,7 @@ class CookieCryptoFilterSpec extends WordSpecLike with ScalaFutures with Matcher
       implicit val system = ActorSystem("test")
       implicit val mat: Materializer = ActorMaterializer()
 
-      override val cookieName = Setup.this.cookieName
+      override lazy val cookieName = Setup.this.cookieName
       protected val encrypter = encrypt _
       protected val decrypter = decrypt _
 
