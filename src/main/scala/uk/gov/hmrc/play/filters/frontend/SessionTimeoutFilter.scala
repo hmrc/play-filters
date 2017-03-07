@@ -41,7 +41,9 @@ import scala.concurrent.Future
   * @param timeoutDuration how long an untouched session should be considered valid for
   */
 class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZone.UTC),
-                           timeoutDuration: Duration) extends Filter with MicroserviceFilterSupport {
+                           timeoutDuration: Duration,
+                           additionalSessionKeysToKeep: Set[String] = Set.empty,
+                           onlyWipeAuthToken: Boolean = false) extends Filter with MicroserviceFilterSupport {
 
   override def apply(f: (RequestHeader) => Future[Result])(rh: RequestHeader): Future[Result] = {
 
@@ -55,6 +57,10 @@ class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZo
       result => result.withSession(result.session(rh) - authToken)
 
     extractTimestamp(rh.session) match {
+      case Some(ts) if hasExpired(ts) && onlyWipeAuthToken =>
+        f(wipeAuthToken(rh))
+          .map(wipeAuthTokenFromSessionCookie)
+          .map(updateTimestamp)
       case Some(ts) if hasExpired(ts) =>
         f(wipeSession(rh))
           .map(wipeAllFromSessionCookie)
@@ -97,7 +103,7 @@ class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZo
   }
 
   private def preservedSessionData(session: Session): Seq[(String, String)] = for {
-    key <- SessionTimeoutFilter.whitelistedSessionKeys.toSeq
+    key <- (SessionTimeoutFilter.whitelistedSessionKeys ++ additionalSessionKeysToKeep).toSeq
     value <- session.get(key)
   } yield key -> value
 
