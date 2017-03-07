@@ -21,15 +21,18 @@ import org.joda.time.{DateTime, DateTimeZone, Duration}
 import play.api.http.HeaderNames.COOKIE
 import play.api.mvc._
 import uk.gov.hmrc.play.filters.MicroserviceFilterSupport
-import uk.gov.hmrc.play.http.SessionKeys.{lastRequestTimestamp, loginOrigin, redirect}
+import uk.gov.hmrc.play.http.SessionKeys._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
 /**
-  * Filter that clears session data if 'ts' session field has missing, or older than configured timeout.
+  * Filter that manipulates session data if 'ts' session field is older than configured timeout.
   *
-  * It clears data on the incoming request, so that the controller does not receive any session information.
+  * If the 'ts' has expired, we wipe the session, and update the 'ts'.
+  * If the 'ts' doesn't exist, or is invalid, we just wipe the authToken.
+  *
+  * This filter clears data on the incoming request, so that the controller does not receive any session information.
   * It also changes the SET-COOKIE header for the outgoing request, so that the browser knows the session has expired.
   *
   * A white-list of session values are omitted from this process.
@@ -42,18 +45,27 @@ class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZo
 
   override def apply(f: (RequestHeader) => Future[Result])(rh: RequestHeader): Future[Result] = {
 
-    val result =
-      if (sessionHasExpired(rh)) {
-        f(wipeRequest(rh)).map(result => result.withSession(preservedSessionData(result.session(rh)): _*))
-      } else {
+    val updateTimestamp: (Result) => Result =
+      result => result.addingToSession(lastRequestTimestamp -> clock().getMillis.toString)(rh)
+
+    val wipeAllFromSessionCookie: (Result) => Result =
+      result => result.withSession(preservedSessionData(result.session(rh)): _*)
+
+    val wipeAuthTokenFromSessionCookie: (Result) => Result =
+      result => result.withSession(result.session(rh) - authToken)
+
+    extractTimestamp(rh.session) match {
+      case Some(ts) if hasExpired(ts) =>
+        f(wipeSession(rh))
+          .map(wipeAllFromSessionCookie)
+          .map(updateTimestamp)
+      case Some(ts) =>
         f(rh)
-      }
-
-    result.map(_.addingToSession(lastRequestTimestamp -> clock().getMillis.toString)(rh))
-  }
-
-  private def sessionHasExpired(requestHeader: RequestHeader): Boolean = {
-    extractTimestamp(requestHeader.session).fold(true)(hasExpired(clock))
+          .map(updateTimestamp)
+      case _ =>
+        f(wipeAuthToken(rh))
+          .map(wipeAuthTokenFromSessionCookie)
+    }
   }
 
   private def extractTimestamp(session: Session): Option[DateTime] = {
@@ -64,13 +76,22 @@ class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZo
     }
   }
 
-  private def hasExpired(now: () => DateTime)(timestamp: DateTime): Boolean = {
+  private def hasExpired(timestamp: DateTime): Boolean = {
     val timeOfExpiry = timestamp plus timeoutDuration
-    now() isAfter timeOfExpiry
+    clock() isAfter timeOfExpiry
   }
 
-  private def wipeRequest(requestHeader: RequestHeader): RequestHeader = {
-    val wipedCookie = Session.encodeAsCookie(Session.deserialize(preservedSessionData(requestHeader.session).toMap))
+  private def wipeSession(requestHeader: RequestHeader): RequestHeader = {
+    val sessionMap: Map[String, String] = preservedSessionData(requestHeader.session).toMap
+    mkRequest(requestHeader, Session.deserialize(sessionMap))
+  }
+
+  private def wipeAuthToken(requestHeader: RequestHeader): RequestHeader = {
+    mkRequest(requestHeader, requestHeader.session - authToken)
+  }
+
+  private def mkRequest(requestHeader: RequestHeader, session: Session): RequestHeader = {
+    val wipedCookie = Session.encodeAsCookie(session)
     val wipedHeaders = requestHeader.headers.replace(COOKIE -> Cookies.encodeCookieHeader(Seq(wipedCookie)))
     requestHeader.copy(headers = wipedHeaders)
   }
