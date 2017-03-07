@@ -41,7 +41,9 @@ import scala.concurrent.Future
   * @param timeoutDuration how long an untouched session should be considered valid for
   */
 class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZone.UTC),
-                           timeoutDuration: Duration) extends Filter with MicroserviceFilterSupport {
+                           timeoutDuration: Duration,
+                           additionalSessionKeysToKeep: Set[String] = Set.empty,
+                           onlyWipeAuthToken: Boolean = false) extends Filter with MicroserviceFilterSupport {
 
   override def apply(f: (RequestHeader) => Future[Result])(rh: RequestHeader): Future[Result] = {
 
@@ -54,27 +56,40 @@ class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZo
     val wipeAuthTokenFromSessionCookie: (Result) => Result =
       result => result.withSession(result.session(rh) - authToken)
 
-    extractTimestamp(rh.session) match {
-      case Some(ts) if hasExpired(ts) =>
-        f(wipeSession(rh))
-          .map(wipeAllFromSessionCookie)
-          .map(updateTimestamp)
-      case Some(ts) =>
-        f(rh)
-          .map(updateTimestamp)
-      case _ =>
-        f(wipeAuthToken(rh))
-          .map(wipeAuthTokenFromSessionCookie)
+    val wipeTimestampFromSessionCookie: (Result) => Result =
+      result => result.withSession(result.session(rh) - lastRequestTimestamp)
+
+    def handleAsMissingTimestamp() = f(wipeAuthToken(rh))
+        .map(wipeAuthTokenFromSessionCookie)
+        .map(wipeTimestampFromSessionCookie)
+
+    val timestamp = rh.session.get(lastRequestTimestamp)
+
+    timestamp.fold(handleAsMissingTimestamp()) {
+      extractTimestamp(_) match {
+        case Some(ts) if hasExpired(ts) && onlyWipeAuthToken =>
+          f(wipeAuthToken(rh))
+            .map(wipeAuthTokenFromSessionCookie)
+            .map(updateTimestamp)
+        case Some(ts) if hasExpired(ts) =>
+          f(wipeSession(rh))
+            .map(wipeAllFromSessionCookie)
+            .map(updateTimestamp)
+        case Some(_) =>
+          f(rh)
+            .map(updateTimestamp)
+        case _ =>
+          handleAsMissingTimestamp()
+      }
     }
   }
 
-  private def extractTimestamp(session: Session): Option[DateTime] = {
+  private def extractTimestamp(t: String): Option[DateTime] =
     try {
-      session.get(lastRequestTimestamp) map (t => new DateTime(t.toLong, DateTimeZone.UTC))
+      Some(new DateTime(t.toLong, DateTimeZone.UTC))
     } catch {
       case e: NumberFormatException => None
     }
-  }
 
   private def hasExpired(timestamp: DateTime): Boolean = {
     val timeOfExpiry = timestamp plus timeoutDuration
@@ -97,7 +112,7 @@ class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZo
   }
 
   private def preservedSessionData(session: Session): Seq[(String, String)] = for {
-    key <- SessionTimeoutFilter.whitelistedSessionKeys.toSeq
+    key <- (SessionTimeoutFilter.whitelistedSessionKeys ++ additionalSessionKeysToKeep).toSeq
     value <- session.get(key)
   } yield key -> value
 
