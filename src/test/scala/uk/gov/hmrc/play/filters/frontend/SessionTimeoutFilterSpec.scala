@@ -122,13 +122,18 @@ class SessionTimeoutFilterSpec extends WordSpecLike with Matchers with ScalaFutu
       result.futureValue.session.get(lastRequestTimestamp) shouldBe Some(now.getMillis.toString)
     }
 
-    "ignore an invalid timestamp" in {
-      implicit val rh = exampleRequest.withSession(lastRequestTimestamp -> "invalid-format")
-      val result = filter.apply(successfulResult)(rh)
-      result.futureValue.session.get(lastRequestTimestamp) shouldBe Some("invalid-format")
+    "treat an invalid timestamp as a missing timestamp" in {
+      implicit val rh = exampleRequest.withSession(lastRequestTimestamp -> "invalid-format", authToken -> "a-token", loginOrigin -> "gg", "custom" -> "custom")
+
+      val result = filter(successfulResult)(rh)
+
+      result.futureValue.session.get(authToken) shouldBe None
+      result.futureValue.session.get(loginOrigin) shouldBe Some("gg")
+      result.futureValue.session.get("custom") shouldBe Some("custom")
+      result.futureValue.session.get(lastRequestTimestamp) shouldBe None
     }
 
-    "do not add timestamp if it is missing" in {
+    "not add timestamp if it is missing" in {
       implicit val rh = exampleRequest.withSession()
       val result = filter.apply(successfulResult)(rh)
       result.futureValue.session.get(lastRequestTimestamp) shouldBe None

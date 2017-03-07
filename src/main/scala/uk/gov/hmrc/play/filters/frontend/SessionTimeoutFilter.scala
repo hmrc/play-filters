@@ -56,31 +56,40 @@ class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZo
     val wipeAuthTokenFromSessionCookie: (Result) => Result =
       result => result.withSession(result.session(rh) - authToken)
 
-    extractTimestamp(rh.session) match {
-      case Some(ts) if hasExpired(ts) && onlyWipeAuthToken =>
-        f(wipeAuthToken(rh))
-          .map(wipeAuthTokenFromSessionCookie)
-          .map(updateTimestamp)
-      case Some(ts) if hasExpired(ts) =>
-        f(wipeSession(rh))
-          .map(wipeAllFromSessionCookie)
-          .map(updateTimestamp)
-      case Some(ts) =>
-        f(rh)
-          .map(updateTimestamp)
-      case _ =>
-        f(wipeAuthToken(rh))
-          .map(wipeAuthTokenFromSessionCookie)
+    val wipeTimestampFromSessionCookie: (Result) => Result =
+      result => result.withSession(result.session(rh) - lastRequestTimestamp)
+
+    def handleAsMissingTimestamp() = f(wipeAuthToken(rh))
+        .map(wipeAuthTokenFromSessionCookie)
+        .map(wipeTimestampFromSessionCookie)
+
+    val timestamp = rh.session.get(lastRequestTimestamp)
+
+    timestamp.fold(handleAsMissingTimestamp()) {
+      extractTimestamp(_) match {
+        case Some(ts) if hasExpired(ts) && onlyWipeAuthToken =>
+          f(wipeAuthToken(rh))
+            .map(wipeAuthTokenFromSessionCookie)
+            .map(updateTimestamp)
+        case Some(ts) if hasExpired(ts) =>
+          f(wipeSession(rh))
+            .map(wipeAllFromSessionCookie)
+            .map(updateTimestamp)
+        case Some(_) =>
+          f(rh)
+            .map(updateTimestamp)
+        case _ =>
+          handleAsMissingTimestamp()
+      }
     }
   }
 
-  private def extractTimestamp(session: Session): Option[DateTime] = {
+  private def extractTimestamp(t: String): Option[DateTime] =
     try {
-      session.get(lastRequestTimestamp) map (t => new DateTime(t.toLong, DateTimeZone.UTC))
+      Some(new DateTime(t.toLong, DateTimeZone.UTC))
     } catch {
       case e: NumberFormatException => None
     }
-  }
 
   private def hasExpired(timestamp: DateTime): Boolean = {
     val timeOfExpiry = timestamp plus timeoutDuration
