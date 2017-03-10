@@ -45,6 +45,10 @@ class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZo
                            additionalSessionKeysToKeep: Set[String] = Set.empty,
                            onlyWipeAuthToken: Boolean = false) extends Filter with MicroserviceFilterSupport {
 
+  val authRelatedKeys = Seq(authToken, token, userId)
+
+  private def wipeFromSession(session: Session, keys: Seq[String]): Session = keys.foldLeft(session)((s, k) => s - k)
+
   override def apply(f: (RequestHeader) => Future[Result])(rh: RequestHeader): Future[Result] = {
 
     val updateTimestamp: (Result) => Result =
@@ -53,14 +57,14 @@ class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZo
     val wipeAllFromSessionCookie: (Result) => Result =
       result => result.withSession(preservedSessionData(result.session(rh)): _*)
 
-    val wipeAuthTokenFromSessionCookie: (Result) => Result =
-      result => result.withSession(result.session(rh) - authToken)
+    val wipeAuthRelatedKeysFromSessionCookie: (Result) => Result =
+      result => result.withSession(wipeFromSession(result.session(rh), authRelatedKeys))
 
     val wipeTimestampFromSessionCookie: (Result) => Result =
       result => result.withSession(result.session(rh) - lastRequestTimestamp)
 
-    def handleAsMissingTimestamp() = f(wipeAuthToken(rh))
-        .map(wipeAuthTokenFromSessionCookie)
+    def handleAsMissingTimestamp() = f(wipeAuthRelatedKeys(rh))
+        .map(wipeAuthRelatedKeysFromSessionCookie)
         .map(wipeTimestampFromSessionCookie)
 
     val timestamp = rh.session.get(lastRequestTimestamp)
@@ -68,8 +72,8 @@ class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZo
     timestamp.fold(handleAsMissingTimestamp()) {
       extractTimestamp(_) match {
         case Some(ts) if hasExpired(ts) && onlyWipeAuthToken =>
-          f(wipeAuthToken(rh))
-            .map(wipeAuthTokenFromSessionCookie)
+          f(wipeAuthRelatedKeys(rh))
+            .map(wipeAuthRelatedKeysFromSessionCookie)
             .map(updateTimestamp)
         case Some(ts) if hasExpired(ts) =>
           f(wipeSession(rh))
@@ -101,8 +105,8 @@ class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZo
     mkRequest(requestHeader, Session.deserialize(sessionMap))
   }
 
-  private def wipeAuthToken(requestHeader: RequestHeader): RequestHeader = {
-    mkRequest(requestHeader, requestHeader.session - authToken)
+  private def wipeAuthRelatedKeys(requestHeader: RequestHeader): RequestHeader = {
+    mkRequest(requestHeader, wipeFromSession(requestHeader.session, authRelatedKeys))
   }
 
   private def mkRequest(requestHeader: RequestHeader, session: Session): RequestHeader = {
@@ -119,5 +123,12 @@ class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZo
 }
 
 object SessionTimeoutFilter {
-  val whitelistedSessionKeys: Set[String] = Set(lastRequestTimestamp, redirect, loginOrigin, "Csrf-Token")
+  val whitelistedSessionKeys: Set[String] = Set(
+    lastRequestTimestamp,   // the timestamp that this filter manages
+    redirect,               // a redirect used by some authentication provider journeys
+    loginOrigin,            // the name of a service that initiated a login
+    "Csrf-Token",           // the Play default name for a header that contains the CsrfToken value (here only in case it is being misused in tests)
+    "csrfToken",            // the Play default name for the CsrfToken value within the Play Session)
+    authProvider            // a deprecated value that indicates what authentication provider was used for the session - may be used to handle default redirects on failed logins
+  )
 }
