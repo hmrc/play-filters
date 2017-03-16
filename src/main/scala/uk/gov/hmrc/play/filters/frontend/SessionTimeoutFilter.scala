@@ -110,8 +110,9 @@ class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZo
   }
 
   private def mkRequest(requestHeader: RequestHeader, session: Session): RequestHeader = {
-    val wipedCookie = Session.encodeAsCookie(session)
-    val wipedHeaders = requestHeader.headers.replace(COOKIE -> Cookies.encodeCookieHeader(Seq(wipedCookie)))
+    val wipedSessionCookie = Session.encodeAsCookie(session)
+    val otherCookies = requestHeader.cookies.filterNot(_.name == wipedSessionCookie.name).toSeq
+    val wipedHeaders = requestHeader.headers.replace(COOKIE -> Cookies.encodeCookieHeader(Seq(wipedSessionCookie) ++ otherCookies))
     requestHeader.copy(headers = wipedHeaders)
   }
 
