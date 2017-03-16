@@ -21,7 +21,7 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.matchers.{MatchResult, Matcher}
 import org.scalatest.{Matchers, WordSpecLike}
 import org.scalatestplus.play.OneAppPerSuite
-import play.api.mvc.{AnyContentAsEmpty, RequestHeader, Results, Session}
+import play.api.mvc.{RequestHeader, _}
 import play.api.test.{FakeHeaders, FakeRequest}
 import uk.gov.hmrc.play.filters.frontend.SessionTimeoutFilter.whitelistedSessionKeys
 import uk.gov.hmrc.play.http.SessionKeys._
@@ -170,6 +170,26 @@ class SessionTimeoutFilterSpec extends WordSpecLike with Matchers with ScalaFutu
       implicit val rh = exampleRequest.withSession()
       val result = filter.apply(successfulResult)(rh)
       result.futureValue.session.get(lastRequestTimestamp) shouldBe None
+    }
+
+    "ensure non-session cookies are passed through to the action untouched" in {
+      val otherCookie = Cookie("aTestName", "aTestValue")
+
+      val cookieResult = (rh: RequestHeader) => {
+        rh.cookies.exists(_ == otherCookie) shouldBe true
+        Future.successful(Results.Ok)
+      }
+
+      val timestamp = now.minusMinutes(5).getMillis.toString
+      implicit val rh = exampleRequest
+        .withSession(
+          lastRequestTimestamp -> timestamp,
+          authToken -> "a-token",
+          userId -> "some-userId")
+        .withCookies(otherCookie)
+
+      val result = filter(cookieResult)(rh)
+      result.futureValue.header.status shouldBe 200
     }
 
   }
