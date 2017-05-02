@@ -35,7 +35,7 @@ trait DeviceIdFilter extends Filter with DeviceIdCookie {
 
   def appName: String
 
-  case class CookeResult(cookies: Seq[Cookie], newDeviceIdCookie: Option[Cookie])
+  case class CookeResult(cookies: Seq[Cookie], newDeviceIdCookie: Cookie)
 
   private def isDeviceIdCookie(cookie: Cookie): Boolean = cookie.name == DeviceId.MdtpDeviceId && !cookie.value.isEmpty
 
@@ -53,29 +53,31 @@ trait DeviceIdFilter extends Filter with DeviceIdCookie {
           case Some(DeviceId(uuid, None, hash)) =>
             // Replace legacy cookie with new format and add new cookie to response.
             val deviceIdCookie = makeCookie(generateDeviceId(uuid))
-            CookeResult(allCookiesApartFromDeviceId ++ Seq(deviceIdCookie), Some(deviceIdCookie))
+            CookeResult(allCookiesApartFromDeviceId ++ Seq(deviceIdCookie), deviceIdCookie)
 
-          case Some(DeviceId(uuid, timestamp, hash)) =>
-            // Valid new format cookie. No change to request or response.
-            CookeResult(requestCookies, None)
+          case Some(deviceId) =>
+            // Valid new format cookie.
+            // Ensure the cookie is secure by setting it again with the secure flag
+            val secureDeviceIdCookie = buildNewDeviceIdCookie().copy(value = deviceId.value)
+            CookeResult(allCookiesApartFromDeviceId :+ secureDeviceIdCookie, secureDeviceIdCookie)
 
           case None =>
             // Invalid deviceId cookie. Replace invalid cookie from request with new deviceId cookie and return in response.
             val deviceIdCookie = buildNewDeviceIdCookie()
             sendDataEvent(rh, deviceCookeValueId.value, deviceIdCookie.value)
-            CookeResult(allCookiesApartFromDeviceId ++ Seq(deviceIdCookie), Some(deviceIdCookie))
+            CookeResult(allCookiesApartFromDeviceId ++ Seq(deviceIdCookie), deviceIdCookie)
         }
     }.getOrElse {
       // No deviceId cookie found or empty cookie value. Create new deviceId cookie, add to request and response.
       val newDeviceIdCookie = buildNewDeviceIdCookie()
-      CookeResult(allCookiesApartFromDeviceId ++ Seq(newDeviceIdCookie), Some(newDeviceIdCookie))
+      CookeResult(allCookiesApartFromDeviceId ++ Seq(newDeviceIdCookie), newDeviceIdCookie)
     }
 
     val newCookie = HeaderNames.COOKIE -> Cookies.encodeSetCookieHeader(cookieResult.cookies)
     val updatedInputHeaders = rh.copy(headers = rh.headers.replace(newCookie))
 
     next(updatedInputHeaders).map(theHttpResponse => {
-      cookieResult.newDeviceIdCookie.fold(theHttpResponse)(newDeviceIdCookie => theHttpResponse.withCookies(newDeviceIdCookie))
+      theHttpResponse.withCookies(cookieResult.newDeviceIdCookie)
     })
 
   }

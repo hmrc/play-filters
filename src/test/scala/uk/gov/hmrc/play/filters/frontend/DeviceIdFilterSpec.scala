@@ -33,7 +33,7 @@ import uk.gov.hmrc.play.audit.model.{DataEvent, EventTypes}
 
 import scala.concurrent.Future
 
-class DeviceIdFilterSpec extends WordSpecLike with Matchers with OneAppPerSuite with ScalaFutures with MockitoSugar with BeforeAndAfterEach with TypeCheckedTripleEquals with Inspectors {
+class DeviceIdFilterSpec extends WordSpecLike with Matchers with OneAppPerSuite with ScalaFutures with MockitoSugar with BeforeAndAfterEach with TypeCheckedTripleEquals with Inspectors with OptionValues {
 
   lazy val timestamp = System.currentTimeMillis()
 
@@ -76,7 +76,15 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with OneAppPerSuite 
       updatedRequest.getValue
     }
 
-    def getCookieStringValue(input: String): Array[String] = input.substring((DeviceId.MdtpDeviceId + "_").length, input.length).split(";")
+    def mdtpdiSetCookie(result: Result): Cookie = {
+      val cookie = for {
+        header <- result.header.headers.get("Set-Cookie")
+        setCookies = Cookies.decodeSetCookieHeader(header)
+        deviceCookie <- setCookies.find(_.name == DeviceId.MdtpDeviceId)
+      }
+      yield deviceCookie
+      cookie.value
+    }
 
     def generateDeviceIdLegacy(uuid: String = filter.generateUUID): DeviceId = DeviceId(uuid, None, DeviceId.generateHash(uuid, None, filter.secret))
 
@@ -116,7 +124,9 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with OneAppPerSuite 
 
         val result = invokeFilter(Seq(cookie), cookie, Some(2))
 
-        result.header.headers.get("Set-Cookie") shouldBe None
+        val responseCookie = mdtpdiSetCookie(result)
+        responseCookie.value shouldBe deviceIdMadeFromPrevKey.value
+        responseCookie.secure shouldBe true
       }
     }
   }
@@ -126,17 +136,17 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with OneAppPerSuite 
     "create a new deviceId if the deviceId cookie received contains an empty value " in new Setup {
       val result = invokeFilter(Seq(newFormatGoodCookieDeviceId.copy(value="")), newFormatGoodCookieDeviceId)
 
-      val responseCookie = result.header.headers.get("Set-Cookie").get
-
-      getCookieStringValue(responseCookie)(0) shouldBe newFormatGoodCookieDeviceId.value
+      val responseCookie = mdtpdiSetCookie(result)
+      responseCookie.value shouldBe newFormatGoodCookieDeviceId.value
+      responseCookie.secure shouldBe true
     }
 
     "create new deviceId cookie when no cookies exists" in new Setup {
       val result = invokeFilter(Seq.empty, newFormatGoodCookieDeviceId)
 
-      val responseCookie = result.header.headers.get("Set-Cookie").get
-
-      getCookieStringValue(responseCookie)(0) shouldBe newFormatGoodCookieDeviceId.value
+      val responseCookie = mdtpdiSetCookie(result)
+      responseCookie.value shouldBe newFormatGoodCookieDeviceId.value
+      responseCookie.secure shouldBe true
     }
 
     "not change the request or the response when a valid new format mtdpdi cookie exists" in new Setup {
@@ -148,7 +158,23 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with OneAppPerSuite 
       expectedCookie1.value shouldBe "normalValue1"
       expectedCookie2.value shouldBe newFormatGoodCookieDeviceId.value
 
-      result.header.headers.get("Set-Cookie") shouldBe None
+      val responseCookie = mdtpdiSetCookie(result)
+      responseCookie.value shouldBe newFormatGoodCookieDeviceId.value
+      responseCookie.secure shouldBe true
+    }
+
+    "make an insecure mtdpdi cookie secure, keeping the same value" in new Setup {
+      val result = invokeFilter(Seq(newFormatGoodCookieDeviceId, normalCookie), newFormatGoodCookieDeviceId.copy(secure = false))
+
+      val expectedCookie1 = requestPassedToAction().cookies.get("AnotherCookie1").get
+      val expectedCookie2 = requestPassedToAction().cookies.get(DeviceId.MdtpDeviceId).get
+
+      expectedCookie1.value shouldBe "normalValue1"
+      expectedCookie2.value shouldBe newFormatGoodCookieDeviceId.value
+
+      val responseCookie = mdtpdiSetCookie(result)
+      responseCookie.value shouldBe newFormatGoodCookieDeviceId.value
+      responseCookie.secure shouldBe true
     }
 
     "auto convert legacy DeviceId cookie to new format" in new Setup {
@@ -167,9 +193,9 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with OneAppPerSuite 
 
       val result = invokeFilter(Seq(legacyDeviceIdCookie), newFormatDeviceIdCookie)
 
-      val responseCookieString = result.header.headers.get("Set-Cookie").get
-
-      getCookieStringValue(responseCookieString)(0) shouldBe newFormatDeviceIdCookie.value
+      val responseCookie = mdtpdiSetCookie(result)
+      responseCookie.value shouldBe newFormatDeviceIdCookie.value
+      responseCookie.secure shouldBe true
     }
 
     "identify legacy deviceId cookie is invalid and create new deviceId cookie" in new Setup {
@@ -181,9 +207,9 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with OneAppPerSuite 
 
       val result = invokeFilter(Seq(legacyFormatBadCookieDeviceId), newFormatGoodCookieDeviceId)
 
-      val responseCookie = result.header.headers.get("Set-Cookie").get
-
-      getCookieStringValue(responseCookie)(0) shouldBe newFormatGoodCookieDeviceId.value
+      val responseCookie = mdtpdiSetCookie(result)
+      responseCookie.value shouldBe newFormatGoodCookieDeviceId.value
+      responseCookie.secure shouldBe true
 
       expectAuditIdEvent(legacyFormatBadCookieDeviceId.value,newFormatGoodCookieDeviceId.value)
     }
@@ -198,8 +224,9 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with OneAppPerSuite 
       val result = invokeFilter(Seq(newFormatBadCookieDeviceId), newFormatGoodCookieDeviceId)
 
 
-      val responseCookie = result.header.headers.get("Set-Cookie").get
-      getCookieStringValue(responseCookie)(0) shouldBe newFormatGoodCookieDeviceId.value
+      val responseCookie = mdtpdiSetCookie(result)
+      responseCookie.value shouldBe newFormatGoodCookieDeviceId.value
+      responseCookie.secure shouldBe true
 
       expectAuditIdEvent(newFormatBadCookieDeviceId.value,newFormatGoodCookieDeviceId.value)
     }
@@ -214,8 +241,9 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with OneAppPerSuite 
       val result = invokeFilter(Seq(newFormatBadCookieDeviceId), newFormatGoodCookieDeviceId)
 
 
-      val responseCookie = result.header.headers.get("Set-Cookie").get
-      getCookieStringValue(responseCookie)(0) shouldBe newFormatGoodCookieDeviceId.value
+      val responseCookie = mdtpdiSetCookie(result)
+      responseCookie.value shouldBe newFormatGoodCookieDeviceId.value
+      responseCookie.secure shouldBe true
 
       expectAuditIdEvent(newFormatBadCookieDeviceId.value,newFormatGoodCookieDeviceId.value)
     }
@@ -229,8 +257,9 @@ class DeviceIdFilterSpec extends WordSpecLike with Matchers with OneAppPerSuite 
 
       val result = invokeFilter(Seq(newFormatBadCookieDeviceId), newFormatGoodCookieDeviceId)
 
-      val responseCookie = result.header.headers.get("Set-Cookie").get
-      getCookieStringValue(responseCookie)(0) shouldBe newFormatGoodCookieDeviceId.value
+      val responseCookie = mdtpdiSetCookie(result)
+      responseCookie.value shouldBe newFormatGoodCookieDeviceId.value
+      responseCookie.secure shouldBe true
     }
 
   }
