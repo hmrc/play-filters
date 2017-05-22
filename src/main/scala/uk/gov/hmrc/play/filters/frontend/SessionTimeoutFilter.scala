@@ -63,34 +63,23 @@ class SessionTimeoutFilter(clock: () => DateTime = () => DateTime.now(DateTimeZo
     val wipeTimestampFromSessionCookie: (Result) => Result =
       result => result.withSession(result.session(rh) - lastRequestTimestamp)
 
-    def handleAsMissingTimestamp() = f(wipeAuthRelatedKeys(rh))
-        .map(wipeAuthRelatedKeysFromSessionCookie)
-        .map(wipeTimestampFromSessionCookie)
-
     val timestamp = rh.session.get(lastRequestTimestamp)
 
-    timestamp.fold(handleAsMissingTimestamp()) {
-      extractTimestamp(_) match {
-        case Some(ts) if hasExpired(ts) && onlyWipeAuthToken =>
-          f(wipeAuthRelatedKeys(rh))
-            .map(wipeAuthRelatedKeysFromSessionCookie)
-            .map(updateTimestamp)
-        case Some(ts) if hasExpired(ts) =>
-          f(wipeSession(rh))
-            .map(wipeAllFromSessionCookie)
-            .map(updateTimestamp)
-        case Some(_) =>
-          f(rh)
-            .map(updateTimestamp)
-        case _ =>
-          handleAsMissingTimestamp()
-      }
-    }
+    (timestamp.flatMap(timestampToDatetime) match {
+      case Some(ts) if hasExpired(ts) && onlyWipeAuthToken =>
+        f(wipeAuthRelatedKeys(rh))
+          .map(wipeAuthRelatedKeysFromSessionCookie)
+      case Some(ts) if hasExpired(ts) =>
+        f(wipeSession(rh))
+          .map(wipeAllFromSessionCookie)
+      case _ =>
+        f(rh)
+    }).map(updateTimestamp)
   }
 
-  private def extractTimestamp(t: String): Option[DateTime] =
+  private def timestampToDatetime(timestamp: String): Option[DateTime] =
     try {
-      Some(new DateTime(t.toLong, DateTimeZone.UTC))
+      Some(new DateTime(timestamp.toLong, DateTimeZone.UTC))
     } catch {
       case e: NumberFormatException => None
     }

@@ -79,37 +79,23 @@ class SessionTimeoutFilterSpec extends WordSpecLike with Matchers with ScalaFutu
       result.futureValue.session.get("custom") shouldBe Some("custom")
     }
 
-    "strip only auth-related keys from request if timestamp is missing" in {
+    "create timestamp if it's missing" in {
       implicit val rh = exampleRequest.withSession(
         authToken -> "a-token",
         token -> "another-token",
         userId -> "a-userId",
         "custom" -> "custom")
 
-      filter.apply { req =>
-        req.session.get(authToken) shouldBe None
-        req.session.get(userId) shouldBe None
-        req.session.get(token) shouldBe None
+      val result = filter.apply { req =>
+        req.session.get(authToken) shouldBe Some("a-token")
+        req.session.get(userId) shouldBe Some("a-userId")
+        req.session.get(token) shouldBe Some("another-token")
         req.session.get("custom") shouldBe Some("custom")
+        req.session.get(lastRequestTimestamp) shouldBe None
         Future.successful(Results.Ok)
       }(rh)
-    }
 
-    "strip only auth-related keys from result if timestamp is missing" in {
-      implicit val rh = exampleRequest.withSession(
-        authToken -> "a-token",
-        token -> "another-token",
-        userId -> "a-userId",
-        loginOrigin -> "gg",
-        "custom" -> "custom")
-
-      val result = filter(successfulResult)(rh)
-
-      result.futureValue.session.get(authToken) shouldBe None
-      result.futureValue.session.get(userId) shouldBe None
-      result.futureValue.session.get(token) shouldBe None
-      result.futureValue.session.get(loginOrigin) shouldBe Some("gg")
-      result.futureValue.session.get("custom") shouldBe Some("custom")
+      result.futureValue.session.get(lastRequestTimestamp) shouldBe Some(now.getMillis.toString)
     }
 
     "strip only auth-related keys if timestamp is old, and onlyWipeAuthToken == true" in {
@@ -158,18 +144,12 @@ class SessionTimeoutFilterSpec extends WordSpecLike with Matchers with ScalaFutu
 
       val result = filter(successfulResult)(rh)
 
-      result.futureValue.session.get(authToken) shouldBe None
-      result.futureValue.session.get(userId) shouldBe None
-      result.futureValue.session.get(token) shouldBe None
+      result.futureValue.session.get(authToken) shouldBe Some("a-token")
+      result.futureValue.session.get(userId) shouldBe Some("a-userId")
+      result.futureValue.session.get(token) shouldBe Some("another-token")
       result.futureValue.session.get(loginOrigin) shouldBe Some("gg")
       result.futureValue.session.get("custom") shouldBe Some("custom")
-      result.futureValue.session.get(lastRequestTimestamp) shouldBe None
-    }
-
-    "not add timestamp if it is missing" in {
-      implicit val rh = exampleRequest.withSession()
-      val result = filter.apply(successfulResult)(rh)
-      result.futureValue.session.get(lastRequestTimestamp) shouldBe None
+      result.futureValue.session.get(lastRequestTimestamp) shouldBe Some(now.getMillis.toString)
     }
 
     "ensure non-session cookies are passed through to the action untouched" in {
