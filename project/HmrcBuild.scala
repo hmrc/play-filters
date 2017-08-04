@@ -33,7 +33,8 @@ object HmrcBuild extends Build {
       resolvers := Seq(
         Resolver.bintrayRepo("hmrc", "releases"),
         Resolver.typesafeRepo("releases")
-      )
+      ),
+      version := "100.0-SNAPSHOT"
     )
     .disablePlugins(sbt.plugins.JUnitXmlReportPlugin)
 }
@@ -44,8 +45,7 @@ private object AppDependencies {
 
   val compile = Seq(
     "com.typesafe.play" %% "play" % PlayVersion.current % "provided",
-    "uk.gov.hmrc" %% "http-verbs-core" % "0.1-SNAPSHOT"
-
+    "uk.gov.hmrc" %% "http-verbs" % "100.0-SNAPSHOT"
   )
 
   trait TestDependencies {

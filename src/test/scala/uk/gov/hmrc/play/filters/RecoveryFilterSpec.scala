@@ -22,7 +22,7 @@ import org.scalatest.{Matchers, WordSpecLike}
 import org.scalatest.concurrent.ScalaFutures
 import play.api.mvc.{Action, EssentialAction, Headers, RequestHeader}
 import play.api.test.{FakeHeaders, WithApplication}
-import uk.gov.hmrc.play.http.{HttpException, NotFoundException}
+import uk.gov.hmrc.http.{HttpException, NotFoundException}
 
 import scala.concurrent.Future
 
