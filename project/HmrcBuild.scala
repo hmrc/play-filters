@@ -16,26 +16,30 @@
 
 import sbt.Keys._
 import sbt._
+import uk.gov.hmrc.{SbtArtifactory, SbtAutoBuildPlugin}
 import uk.gov.hmrc.versioning.SbtGitVersioning
+import uk.gov.hmrc.versioning.SbtGitVersioning.autoImport.majorVersion
 
 object HmrcBuild extends Build {
-
-  import uk.gov.hmrc._
 
   val appName = "play-filters"
 
   lazy val microservice = Project(appName, file("."))
-    .enablePlugins(SbtAutoBuildPlugin, SbtGitVersioning)
+    .enablePlugins(SbtAutoBuildPlugin, SbtGitVersioning, SbtArtifactory)
     .settings(
-      scalaVersion := "2.11.7",
+      scalaVersion := "2.11.12",
       libraryDependencies ++= AppDependencies(),
-      crossScalaVersions := Seq("2.11.7"),
+      crossScalaVersions := Seq("2.11.12"),
       resolvers := Seq(
         Resolver.bintrayRepo("hmrc", "releases"),
         Resolver.typesafeRepo("releases")
       )
     )
     .disablePlugins(sbt.plugins.JUnitXmlReportPlugin)
+    .settings(majorVersion := 5)
+    .settings(resolvers += Resolver.bintrayRepo("hmrc", "releases"),
+      resolvers += "hmrc-releases" at "https://artefacts.tax.service.gov.uk/artifactory/hmrc-releases/"
+    )
 }
 
 private object AppDependencies {
