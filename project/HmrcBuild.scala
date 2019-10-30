@@ -19,6 +19,7 @@ import sbt._
 import uk.gov.hmrc.{SbtArtifactory, SbtAutoBuildPlugin}
 import uk.gov.hmrc.versioning.SbtGitVersioning
 import uk.gov.hmrc.versioning.SbtGitVersioning.autoImport.majorVersion
+import uk.gov.hmrc.SbtArtifactory.autoImport.makePublicallyAvailableOnBintray
 
 object HmrcBuild extends Build {
 
@@ -35,6 +36,7 @@ object HmrcBuild extends Build {
         Resolver.typesafeRepo("releases")
       )
     )
+    .settings(makePublicallyAvailableOnBintray := true)
     .disablePlugins(sbt.plugins.JUnitXmlReportPlugin)
     .settings(majorVersion := 5)
     .settings(resolvers += Resolver.bintrayRepo("hmrc", "releases"),
