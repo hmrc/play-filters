@@ -3,6 +3,7 @@ play-filters
 
 [![Build Status](https://travis-ci.org/hmrc/play-filters.svg)](https://travis-ci.org/hmrc/play-filters) [ ![Download](https://api.bintray.com/packages/hmrc/releases/play-filters/images/download.svg) ](https://bintray.com/hmrc/releases/play-filters/_latestVersion)
 
+## This library is deprecated since it has been merged with the bootstrap libraries.
 
 A library containing Play Framework filters to be used by frontend apps and microservices.
 
